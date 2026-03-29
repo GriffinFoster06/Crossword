@@ -420,4 +420,4 @@ Target: compile a merged, deduplicated list of 400K+ entries with unified scorin
 - **TypeScript**: Strict mode, Zustand stores, functional components only
 - **Testing**: Rust unit tests for engine + word DB. Vitest for frontend.
 - **Commits**: Conventional commits (`feat:`, `fix:`, `refactor:`, etc.)
-- **Branch**: All development on `claude/crossword-creator-ai-eE406`
+- **Branching**: Use short-lived feature branches off `main`; open PRs for review before merging.
