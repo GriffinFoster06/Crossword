@@ -127,7 +127,7 @@ A desktop crossword construction application that rivals and surpasses Ingrid, C
 
 | Rule | Detail |
 |------|--------|
-| Grid sizes | 15×15 (daily), 21×21 (Sunday), odd dimensions only |
+| Grid sizes | Exactly 15×15 (daily) and 21×21 (Sunday) only (no other sizes) |
 | Symmetry | 180° rotational symmetry mandatory |
 | Min word length | 3 letters (no 2-letter words ever) |
 | All-over interlock | All white cells connected (no isolated sections) |
