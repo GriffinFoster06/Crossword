@@ -11,7 +11,7 @@ A desktop crossword construction application that rivals and surpasses Ingrid, C
 ## Architecture
 
 ```
-crossword/
+./
 ├── src-tauri/                          # Rust backend (Tauri)
 │   ├── Cargo.toml
 │   ├── src/
