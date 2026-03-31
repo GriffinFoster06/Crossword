@@ -2,3 +2,13 @@ node_modules
 dist
 .DS_Store
 *.local
+src-tauri/target/
+.env
+.vscode/
+.idea/
+*.log
+build/
+data/raw/
+data/clues/
+models/
+resources/*.db
