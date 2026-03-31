@@ -30,16 +30,14 @@ function computeNumbers(cells: Cell[][], size: number) {
       const startsAcross =
         !cells[row][col].is_black &&
         (col === 0 || cells[row][col - 1].is_black) &&
-        col + 2 < size &&
-        !cells[row][col + 1].is_black &&
-        !cells[row][col + 2].is_black;
+        col + 1 < size &&
+        !cells[row][col + 1].is_black;
 
       const startsDown =
         !cells[row][col].is_black &&
         (row === 0 || cells[row - 1][col].is_black) &&
-        row + 2 < size &&
-        !cells[row + 1][col].is_black &&
-        !cells[row + 2][col].is_black;
+        row + 1 < size &&
+        !cells[row + 1][col].is_black;
 
       if (startsAcross || startsDown) {
         cells[row][col].number = n++;

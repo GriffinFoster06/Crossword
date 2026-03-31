@@ -44,10 +44,6 @@ pub fn import_puz(data: &[u8]) -> anyhow::Result<PuzzleFile> {
         anyhow::bail!("Invalid grid dimensions: {}x{}", width, height);
     }
 
-    if width != height {
-        anyhow::bail!("Non-square .puz grids are not supported: {}x{}", width, height);
-    }
-
     let grid_size = width * height;
     let solution_start = 52;
     let state_start = solution_start + grid_size;
@@ -76,7 +72,7 @@ pub fn import_puz(data: &[u8]) -> anyhow::Result<PuzzleFile> {
 
     // Parse null-terminated strings
     let strings_data = &data[strings_start..];
-    let strings = parse_null_terminated_strings(strings_data, num_clues + 4); // title, author, copyright, clues..., notes
+    let strings = parse_null_terminated_strings(strings_data, num_clues + 3); // title, author, copyright, clues...
 
     let title = strings.first().cloned().unwrap_or_default();
     let author = strings.get(1).cloned().unwrap_or_default();

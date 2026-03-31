@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { usePuzzleStore, WordSlotInfo } from '../stores/puzzleStore';
+import { usePuzzleStore } from '../stores/puzzleStore';
 import { useUiStore } from '../stores/uiStore';
 
 export function useKeyboard() {
@@ -101,7 +101,7 @@ export function useKeyboard() {
 
 function moveToNextWord(
   dir: number,
-  puzzle: { size: number; cells: { is_black: boolean; number: number | null }[][]; slots: WordSlotInfo[] },
+  puzzle: { size: number; cells: { is_black: boolean; number: number | null }[][]; slots: { number: number; direction: string; row: number; col: number }[] },
   ui: { selectedRow: number; selectedCol: number; direction: string; selectCell: (r: number, c: number) => void; setDirection: (d: 'Across' | 'Down') => void }
 ) {
   const slots = puzzle.slots.filter(s => s.direction === ui.direction);
@@ -110,9 +110,9 @@ function moveToNextWord(
   // Find current slot
   const currentIdx = slots.findIndex(s => {
     if (s.direction === 'Across') {
-      return s.row === ui.selectedRow && ui.selectedCol >= s.col && ui.selectedCol < s.col + s.length;
+      return s.row === ui.selectedRow && ui.selectedCol >= s.col && ui.selectedCol < s.col + (s as any).length;
     } else {
-      return s.col === ui.selectedCol && ui.selectedRow >= s.row && ui.selectedRow < s.row + s.length;
+      return s.col === ui.selectedCol && ui.selectedRow >= s.row && ui.selectedRow < s.row + (s as any).length;
     }
   });
 
