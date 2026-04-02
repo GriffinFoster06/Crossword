@@ -693,6 +693,7 @@ dependencies = [
  "anyhow",
  "bitvec",
  "encoding_rs",
+ "futures-util",
  "log",
  "printpdf",
  "rayon",

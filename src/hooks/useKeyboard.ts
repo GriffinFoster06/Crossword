@@ -10,9 +10,71 @@ export function useKeyboard() {
       const { selectedRow: row, selectedCol: col, direction, mode } = ui;
       const { size, cells } = puzzle;
 
-      // Don't capture when typing in inputs
       const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+      const inInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+
+      // ── Global shortcuts (work even in inputs) ──────────────────────────
+      const meta = e.metaKey || e.ctrlKey;
+
+      if (meta && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        (usePuzzleStore as any).temporal?.getState()?.undo();
+        return;
+      }
+      if ((meta && e.key === 'y') || (meta && e.shiftKey && e.key === 'z')) {
+        e.preventDefault();
+        (usePuzzleStore as any).temporal?.getState()?.redo();
+        return;
+      }
+      if (meta && e.key === 's') {
+        e.preventDefault();
+        // Trigger save — dispatch a custom event the toolbar/App can catch
+        window.dispatchEvent(new CustomEvent('crossforge:save'));
+        return;
+      }
+      if (meta && e.key === 'n') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('crossforge:new'));
+        return;
+      }
+      if (meta && e.key === 'o') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('crossforge:open'));
+        return;
+      }
+      if (meta && e.key === 'e') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('crossforge:export'));
+        return;
+      }
+
+      // Close context menu on any key
+      if (ui.contextMenu) {
+        ui.setContextMenu(null);
+      }
+
+      // Don't capture grid navigation when typing in inputs
+      if (inInput) return;
+
+      // ── Rebus mode (Ctrl+Enter or Enter when rebusMode active) ───────────
+      if (e.key === 'Enter' && meta) {
+        e.preventDefault();
+        ui.setRebusMode(!ui.rebusMode);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        ui.setRebusMode(false);
+        ui.setContextMenu(null);
+        ui.setShowShortcutOverlay(false);
+        return;
+      }
+
+      if (e.key === '?' && !meta) {
+        e.preventDefault();
+        ui.setShowShortcutOverlay(!ui.showShortcutOverlay);
+        return;
+      }
 
       switch (e.key) {
         case 'ArrowRight':
@@ -58,7 +120,6 @@ export function useKeyboard() {
 
         case 'Tab':
           e.preventDefault();
-          // Move to next/previous word
           moveToNextWord(e.shiftKey ? -1 : 1, puzzle, ui);
           break;
 
@@ -76,10 +137,6 @@ export function useKeyboard() {
             e.preventDefault();
             puzzle.toggleBlack(row, col);
           }
-          break;
-
-        case 'Escape':
-          e.preventDefault();
           break;
 
         default:
@@ -107,7 +164,6 @@ function moveToNextWord(
   const slots = puzzle.slots.filter(s => s.direction === ui.direction);
   if (slots.length === 0) return;
 
-  // Find current slot
   const currentIdx = slots.findIndex(s => {
     if (s.direction === 'Across') {
       return s.row === ui.selectedRow && ui.selectedCol >= s.col && ui.selectedCol < s.col + (s as any).length;

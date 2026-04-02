@@ -295,3 +295,74 @@ fn count_triple_stacks(slots: &[crate::engine::grid::WordSlot], _size: usize) ->
     }
     count
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::grid::GridState;
+
+    fn all_white_15() -> GridState {
+        let mut g = GridState::new(15);
+        g.compute_numbers();
+        g
+    }
+
+    #[test]
+    fn test_valid_empty_15x15_has_no_word_length_errors() {
+        // An all-white 15×15 has only length-15 slots, so no "too-short word" violations.
+        let g = all_white_15();
+        let result = validate(&g);
+        let short_word_violations = result.violations.iter()
+            .filter(|v| v.rule == "MinWordLength")
+            .count();
+        assert_eq!(short_word_violations, 0);
+    }
+
+    #[test]
+    fn test_invalid_grid_size() {
+        // 10×10 is not a valid NYT size
+        let g = GridState::new(10);
+        let result = validate(&g);
+        assert!(!result.is_valid);
+        assert!(result.violations.iter().any(|v| v.rule.contains("Size") || v.rule.contains("size") || v.severity == Severity::Error));
+    }
+
+    #[test]
+    fn test_15x15_stats_word_count() {
+        // All-white 15×15: 15 across + 15 down = 30 words, each length 15
+        let g = all_white_15();
+        let result = validate(&g);
+        assert_eq!(result.stats.across_count, 15);
+        assert_eq!(result.stats.down_count, 15);
+        assert_eq!(result.stats.word_count, 30);
+    }
+
+    #[test]
+    fn test_unchecked_cells_all_white() {
+        // In an all-white grid, every cell is checked (appears in both across and down)
+        let g = all_white_15();
+        let result = validate(&g);
+        assert_eq!(result.stats.unchecked_cells, 0);
+    }
+
+    #[test]
+    fn test_isolated_cell_fails_connectivity() {
+        // Create a fully black grid with one lone white cell to trigger connectivity error
+        let mut g = GridState::new(15);
+        // Make most cells black manually
+        for r in 0..15 {
+            for c in 0..15 {
+                g.cells[r][c].is_black = true;
+            }
+        }
+        // Leave two adjacent cells white (to form a valid word), in opposite corners
+        g.cells[0][0].is_black = false;
+        g.cells[0][1].is_black = false;
+        g.cells[0][2].is_black = false; // 3-letter across
+        g.cells[14][14].is_black = false; // isolated
+
+        let result = validate(&g);
+        assert!(!result.is_valid);
+        assert!(result.violations.iter().any(|v| v.rule.contains("onnect") || v.rule.contains("Isolated")));
+    }
+}

@@ -120,6 +120,20 @@ export async function exportPdf(puzzle: PuzzleFile, path: string, includeSolutio
   return callTauri('cmd_export_pdf', { puzzle, path, includeSolution });
 }
 
+export interface NytExportResult {
+  puz_path: string;
+  cover_letter: string;
+  warnings: string[];
+}
+
+export async function exportNyt(
+  puzzle: PuzzleFile,
+  puzPath: string,
+  validation: ValidationResult,
+): Promise<NytExportResult> {
+  return callTauri('cmd_export_nyt', { puzzle, puzPath, validation });
+}
+
 // --- AI ---
 
 export async function checkOllama(): Promise<OllamaStatus> {
@@ -166,6 +180,106 @@ export async function getClueHistory(word: string): Promise<ClueHistoryEntry[]> 
     return await callTauri<ClueHistoryEntry[]>('cmd_get_clue_history', { word });
   } catch {
     return [];
+  }
+}
+
+export interface BatchClueInput {
+  number: number;
+  direction: string;
+  answer: string;
+}
+
+export interface BatchClueResult {
+  number: number;
+  direction: string;
+  answer: string;
+  clue: string;
+  style: string;
+}
+
+export interface GridPattern {
+  pattern: number[][];
+  theme_positions: { row: number; col: number; direction: string; word: string }[];
+  word_count: number;
+  black_count: number;
+  description: string;
+  notes: string;
+}
+
+export interface PuzzleRequest {
+  theme_seed: string;
+  difficulty: string;
+  requested_entries: string[];
+  grid_size: number;
+  notes: string;
+}
+
+export async function batchGenerateClues(
+  words: BatchClueInput[],
+  difficulty: number,
+  onProgress?: (index: number, total: number, result: BatchClueResult) => void,
+): Promise<BatchClueResult[]> {
+  await ensureTauri();
+  let unlisten: (() => void) | null = null;
+  if (listen && onProgress) {
+    unlisten = await listen('batch-clue-progress', (e: { payload: unknown }) => {
+      const p = e.payload as { index: number; total: number; result: BatchClueResult };
+      onProgress(p.index, p.total, p.result);
+    });
+  }
+  try {
+    return await callTauri<BatchClueResult[]>('cmd_batch_generate_clues', { words, difficulty });
+  } finally {
+    unlisten?.();
+  }
+}
+
+export async function constructGrid(
+  entries: { word: string; is_revealer: boolean }[],
+  gridSize: number,
+  difficulty?: string,
+): Promise<GridPattern> {
+  return callTauri('cmd_construct_grid', { entries, gridSize, difficulty: difficulty ?? null });
+}
+
+export async function parsePuzzleRequest(request: string): Promise<PuzzleRequest> {
+  return callTauri('cmd_parse_puzzle_request', { request });
+}
+
+export async function evaluateFill(words: string[], themeEntries: string[]): Promise<string> {
+  return callTauri('cmd_evaluate_fill', { words, themeEntries });
+}
+
+export async function checkCrossforgeModels(): Promise<string[]> {
+  try {
+    return await callTauri<string[]>('cmd_check_crossforge_models');
+  } catch {
+    return [];
+  }
+}
+
+export interface ModelInstallProgress {
+  step: 'checking' | 'installing' | 'done' | 'skipped' | 'error';
+  model: string;
+  index: number;
+  total: number;
+  message: string;
+}
+
+export async function installModels(
+  onProgress?: (p: ModelInstallProgress) => void,
+): Promise<void> {
+  await ensureTauri();
+  let unlisten: (() => void) | null = null;
+  if (listen && onProgress) {
+    unlisten = await listen('model-install-progress', (e: { payload: unknown }) => {
+      onProgress(e.payload as ModelInstallProgress);
+    });
+  }
+  try {
+    await callTauri<void>('cmd_install_models');
+  } finally {
+    unlisten?.();
   }
 }
 

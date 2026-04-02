@@ -371,9 +371,10 @@ impl Solver {
             .filter_map(|&ci| self.solver_slots[bi].candidates[ci].chars().nth(bi_pos))
             .collect();
 
+        let ai_candidates = self.solver_slots[ai].candidates.clone();
         let before = self.solver_slots[ai].domain.len();
         self.solver_slots[ai].domain.retain(|&ci| {
-            let ai_letter = self.solver_slots[ai].candidates[ci].chars().nth(ai_pos);
+            let ai_letter = ai_candidates[ci].chars().nth(ai_pos);
             ai_letter.map_or(false, |l| bi_letters_at_pos.contains(&l))
         });
 

@@ -1,0 +1,4 @@
+[build]
+# Use rustup-managed stable toolchain instead of Homebrew rustc.
+# The Homebrew rustc (1.84.0) is too old for project dependencies.
+rustc = "/Users/griffinfoster/.rustup/toolchains/stable-aarch64-apple-darwin/bin/rustc"

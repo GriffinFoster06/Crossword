@@ -7,10 +7,11 @@ export function Toolbar() {
   const size = usePuzzleStore((s) => s.size);
   const cells = usePuzzleStore((s) => s.cells);
   const symmetric = usePuzzleStore((s) => s.symmetric);
-  const newPuzzle = usePuzzleStore((s) => s.newPuzzle);
   const clearFill = usePuzzleStore((s) => s.clearFill);
   const applyAutofill = usePuzzleStore((s) => s.applyAutofill);
   const setSymmetric = usePuzzleStore((s) => s.setSymmetric);
+  const toggleCircle = usePuzzleStore((s) => s.toggleCircle);
+  const toggleShade = usePuzzleStore((s) => s.toggleShade);
 
   const mode = useUiStore((s) => s.mode);
   const setMode = useUiStore((s) => s.setMode);
@@ -22,6 +23,19 @@ export function Toolbar() {
   const showAiPanel = useUiStore((s) => s.showAiPanel);
   const setShowAiPanel = useUiStore((s) => s.setShowAiPanel);
   const wordCount = useUiStore((s) => s.wordCount);
+  const showHeatMap = useUiStore((s) => s.showHeatMap);
+  const setShowHeatMap = useUiStore((s) => s.setShowHeatMap);
+  const showStatsPanel = useUiStore((s) => s.showStatsPanel);
+  const setShowStatsPanel = useUiStore((s) => s.setShowStatsPanel);
+  const rebusMode = useUiStore((s) => s.rebusMode);
+  const setRebusMode = useUiStore((s) => s.setRebusMode);
+  const selectedRow = useUiStore((s) => s.selectedRow);
+  const selectedCol = useUiStore((s) => s.selectedCol);
+  const isDirty = useUiStore((s) => s.isDirty);
+  const currentFilePath = useUiStore((s) => s.currentFilePath);
+  const setShowNewPuzzleDialog = useUiStore((s) => s.setShowNewPuzzleDialog);
+  const setShowExportDialog = useUiStore((s) => s.setShowExportDialog);
+  const setShowSettingsDialog = useUiStore((s) => s.setShowSettingsDialog);
 
   const handleAutofill = async () => {
     setAutofilling(true);
@@ -50,13 +64,6 @@ export function Toolbar() {
     }
   };
 
-  const handleNewPuzzle = (newSize: number) => {
-    if (confirm(`Create new ${newSize}×${newSize} puzzle? Current work will be lost.`)) {
-      newPuzzle(newSize);
-      setValidation(null);
-    }
-  };
-
   // Undo/Redo
   const undo = () => {
     const store = usePuzzleStore as any;
@@ -67,30 +74,48 @@ export function Toolbar() {
     store.temporal?.getState()?.redo();
   };
 
+  const fileName = currentFilePath ? currentFilePath.split('/').pop() : null;
+
   return (
     <div className="toolbar">
       <div className="toolbar-group">
         <span className="toolbar-label">CrossForge</span>
       </div>
 
+      {/* File operations */}
       <div className="toolbar-group">
-        <select
-          value={size}
-          onChange={(e) => handleNewPuzzle(Number(e.target.value))}
-          className="toolbar-select"
+        <button
+          className="toolbar-btn"
+          onClick={() => setShowNewPuzzleDialog(true)}
+          title="New Puzzle (Ctrl+N)"
         >
-          <option value={5}>5×5</option>
-          <option value={7}>7×7</option>
-          <option value={9}>9×9</option>
-          <option value={11}>11×11</option>
-          <option value={13}>13×13</option>
-          <option value={15}>15×15</option>
-          <option value={17}>17×17</option>
-          <option value={19}>19×19</option>
-          <option value={21}>21×21</option>
-        </select>
+          New
+        </button>
+        <button
+          className="toolbar-btn"
+          onClick={() => setShowExportDialog(true)}
+          title="Open / Save / Export (Ctrl+O)"
+        >
+          {fileName ? (
+            <span className="toolbar-filename">{isDirty ? '● ' : ''}{fileName}</span>
+          ) : 'Files'}
+        </button>
+        <button
+          className="toolbar-btn"
+          onClick={() => window.dispatchEvent(new CustomEvent('crossforge:save'))}
+          title="Quick Save (Ctrl+S)"
+          disabled={!currentFilePath}
+        >
+          Save
+        </button>
       </div>
 
+      {/* Grid size (display only) */}
+      <div className="toolbar-group">
+        <span className="toolbar-size">{size}×{size}</span>
+      </div>
+
+      {/* Mode */}
       <div className="toolbar-group">
         {(['build', 'fill', 'clue'] as Mode[]).map((m) => (
           <button
@@ -103,16 +128,45 @@ export function Toolbar() {
         ))}
       </div>
 
+      {/* Cell markers (build mode) */}
+      {mode === 'build' && (
+        <div className="toolbar-group">
+          <button
+            className="toolbar-btn"
+            title="Circle selected cell (Ctrl+Shift+O)"
+            onClick={() => toggleCircle(selectedRow, selectedCol)}
+          >
+            ◎
+          </button>
+          <button
+            className="toolbar-btn"
+            title="Shade selected cell (Ctrl+Shift+S)"
+            onClick={() => toggleShade(selectedRow, selectedCol)}
+          >
+            ▩
+          </button>
+          <button
+            className={`toolbar-btn ${rebusMode ? 'active' : ''}`}
+            title="Rebus mode — Ctrl+Enter"
+            onClick={() => setRebusMode(!rebusMode)}
+          >
+            R+
+          </button>
+        </div>
+      )}
+
+      {/* Symmetry */}
       <div className="toolbar-group">
         <button
           className={`toolbar-btn ${symmetric ? 'active' : ''}`}
           onClick={() => setSymmetric(!symmetric)}
           title="180° rotational symmetry"
         >
-          Symmetry
+          Sym
         </button>
       </div>
 
+      {/* Autofill */}
       <div className="toolbar-group">
         <button
           className="toolbar-btn toolbar-btn-primary"
@@ -123,20 +177,22 @@ export function Toolbar() {
         </button>
         {isAutofilling && (
           <button className="toolbar-btn" onClick={cancelAutofill}>
-            Cancel
+            Stop
           </button>
         )}
       </div>
 
+      {/* Validate / Clear */}
       <div className="toolbar-group">
         <button className="toolbar-btn" onClick={handleValidate}>
           Validate
         </button>
         <button className="toolbar-btn" onClick={clearFill}>
-          Clear Fill
+          Clear
         </button>
       </div>
 
+      {/* Undo/Redo */}
       <div className="toolbar-group">
         <button className="toolbar-btn" onClick={undo} title="Undo (Ctrl+Z)">
           Undo
@@ -146,18 +202,42 @@ export function Toolbar() {
         </button>
       </div>
 
+      {/* View toggles */}
       <div className="toolbar-group">
+        <button
+          className={`toolbar-btn ${showHeatMap ? 'active' : ''}`}
+          onClick={() => setShowHeatMap(!showHeatMap)}
+          title="Fill quality heat map"
+        >
+          Heat
+        </button>
+        <button
+          className={`toolbar-btn ${showStatsPanel ? 'active' : ''}`}
+          onClick={() => setShowStatsPanel(!showStatsPanel)}
+          title="Puzzle statistics"
+        >
+          Stats
+        </button>
         <button
           className={`toolbar-btn ${showAiPanel ? 'active' : ''}`}
           onClick={() => setShowAiPanel(!showAiPanel)}
+          title="AI panel"
         >
           AI
         </button>
         <button
           className="toolbar-btn"
           onClick={() => setDarkMode(!darkMode)}
+          title="Toggle theme"
         >
-          {darkMode ? 'Light' : 'Dark'}
+          {darkMode ? '☀' : '☾'}
+        </button>
+        <button
+          className="toolbar-btn"
+          onClick={() => setShowSettingsDialog(true)}
+          title="Settings"
+        >
+          ⚙
         </button>
       </div>
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import { usePuzzleStore } from './stores/puzzleStore';
 import { useUiStore } from './stores/uiStore';
 import { useKeyboard } from './hooks/useKeyboard';
@@ -9,7 +9,14 @@ import { WordPanel } from './components/words/WordPanel';
 import { Toolbar } from './components/toolbar/Toolbar';
 import { StatusBar } from './components/toolbar/StatusBar';
 import { AiPanel } from './components/ai/AiPanel';
-import { checkOllama, getWordCount } from './lib/tauriCommands';
+import { NewPuzzleDialog } from './components/dialogs/NewPuzzleDialog';
+import { ExportDialog } from './components/dialogs/ExportDialog';
+import { SettingsDialog } from './components/dialogs/SettingsDialog';
+import { InstallModelsDialog } from './components/dialogs/InstallModelsDialog';
+import { RebusModal } from './components/dialogs/RebusModal';
+import { ShortcutOverlay } from './components/dialogs/ShortcutOverlay';
+import { StatsPanel } from './components/stats/StatsPanel';
+import { checkOllama, getWordCount, savePuzzle, checkCrossforgeModels } from './lib/tauriCommands';
 
 export default function App() {
   useKeyboard();
@@ -18,9 +25,20 @@ export default function App() {
   const darkMode = useUiStore((s) => s.darkMode);
   const setOllamaAvailable = useUiStore((s) => s.setOllamaAvailable);
   const setWordCount = useUiStore((s) => s.setWordCount);
+  const showStatsPanel = useUiStore((s) => s.showStatsPanel);
+  const showNewPuzzleDialog = useUiStore((s) => s.showNewPuzzleDialog);
+  const showExportDialog = useUiStore((s) => s.showExportDialog);
+  const showSettingsDialog = useUiStore((s) => s.showSettingsDialog);
+  const showInstallModelsDialog = useUiStore((s) => s.showInstallModelsDialog);
+  const rebusMode = useUiStore((s) => s.rebusMode);
+  const showShortcutOverlay = useUiStore((s) => s.showShortcutOverlay);
+  const setShowNewPuzzleDialog = useUiStore((s) => s.setShowNewPuzzleDialog);
+  const setShowExportDialog = useUiStore((s) => s.setShowExportDialog);
+  const setShowInstallModelsDialog = useUiStore((s) => s.setShowInstallModelsDialog);
 
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [gridDimensions, setGridDimensions] = useState({ width: 600, height: 600 });
+  const [installedCrossforgeModels, setInstalledCrossforgeModels] = useState<string[]>([]);
 
   const measureGrid = useCallback(() => {
     if (gridContainerRef.current) {
@@ -38,8 +56,55 @@ export default function App() {
   }, [measureGrid]);
 
   useEffect(() => {
-    checkOllama().then((status) => setOllamaAvailable(status.available));
+    checkOllama().then(async (status) => {
+      setOllamaAvailable(status.available);
+      if (status.available) {
+        const installed = await checkCrossforgeModels();
+        setInstalledCrossforgeModels(installed);
+        // Show install dialog on first run if any CrossForge model is missing
+        const alreadyPrompted = localStorage.getItem('crossforge_model_install_prompted');
+        if (!alreadyPrompted && installed.length < 5) {
+          localStorage.setItem('crossforge_model_install_prompted', '1');
+          setShowInstallModelsDialog(true);
+        }
+      }
+    });
     getWordCount().then((count) => setWordCount(count));
+  }, []);
+
+  // Wire keyboard shortcut custom events to dialog actions
+  useEffect(() => {
+    const onNew = () => setShowNewPuzzleDialog(true);
+    const onOpen = () => setShowExportDialog(true);
+    const onExport = () => setShowExportDialog(true);
+    const onSave = async () => {
+      const ui = useUiStore.getState();
+      if (!ui.currentFilePath) {
+        setShowExportDialog(true);
+        return;
+      }
+      const puzzle = usePuzzleStore.getState();
+      try {
+        await savePuzzle(
+          { version: 1, grid: { size: puzzle.size, cells: puzzle.cells }, clues: puzzle.clues, metadata: puzzle.metadata, theme: puzzle.theme, notes: null },
+          ui.currentFilePath
+        );
+        ui.setIsDirty(false);
+      } catch (e) {
+        console.error('Save failed:', e);
+      }
+    };
+
+    window.addEventListener('crossforge:new', onNew);
+    window.addEventListener('crossforge:open', onOpen);
+    window.addEventListener('crossforge:export', onExport);
+    window.addEventListener('crossforge:save', onSave);
+    return () => {
+      window.removeEventListener('crossforge:new', onNew);
+      window.removeEventListener('crossforge:open', onOpen);
+      window.removeEventListener('crossforge:export', onExport);
+      window.removeEventListener('crossforge:save', onSave);
+    };
   }, []);
 
   return (
@@ -47,7 +112,7 @@ export default function App() {
       <Toolbar />
 
       <div className="app-body">
-        <PanelGroup direction="horizontal" autoSaveId="crossforge-layout">
+        <PanelGroup orientation="horizontal" id="crossforge-layout">
           <Panel defaultSize={55} minSize={35}>
             <div className="grid-container" ref={gridContainerRef}>
               <GridCanvas width={gridDimensions.width} height={gridDimensions.height} />
@@ -57,7 +122,7 @@ export default function App() {
           <PanelResizeHandle className="resize-handle" />
 
           <Panel defaultSize={45} minSize={25}>
-            <PanelGroup direction="vertical" autoSaveId="crossforge-right">
+            <PanelGroup orientation="vertical" id="crossforge-right">
               <Panel defaultSize={40} minSize={15}>
                 <WordPanel />
               </Panel>
@@ -82,6 +147,16 @@ export default function App() {
       </div>
 
       <StatusBar />
+
+      {showNewPuzzleDialog && <NewPuzzleDialog />}
+      {showExportDialog && <ExportDialog />}
+      {showSettingsDialog && <SettingsDialog />}
+      {showStatsPanel && <StatsPanel />}
+      {showInstallModelsDialog && (
+        <InstallModelsDialog installedModels={installedCrossforgeModels} />
+      )}
+      {rebusMode && <RebusModal />}
+      {showShortcutOverlay && <ShortcutOverlay />}
     </div>
   );
 }

@@ -4,6 +4,11 @@ import react from '@vitejs/plugin-react'
 // https://vitejs.dev/config/
 export default defineConfig(async () => ({
   plugins: [react()],
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: [],
+  },
 
   // Vite options tailored for Tauri development and production
   clearScreen: false,

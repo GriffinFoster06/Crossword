@@ -32,6 +32,34 @@ interface UiState {
   // Theme
   darkMode: boolean;
 
+  // Heat map (fill quality overlay)
+  showHeatMap: boolean;
+
+  // File state
+  currentFilePath: string | null;
+  isDirty: boolean;
+
+  // Dialog visibility
+  showNewPuzzleDialog: boolean;
+  showExportDialog: boolean;
+  showSettingsDialog: boolean;
+  showInstallModelsDialog: boolean;
+
+  // Context menu
+  contextMenu: { x: number; y: number; row: number; col: number } | null;
+
+  // Rebus mode
+  rebusMode: boolean;
+
+  // Ghost word preview (hovered word in WordPanel)
+  ghostWord: string | null;
+
+  // Keyboard shortcut overlay
+  showShortcutOverlay: boolean;
+
+  // Stats panel
+  showStatsPanel: boolean;
+
   // Actions
   selectCell: (row: number, col: number) => void;
   setDirection: (dir: Direction) => void;
@@ -47,6 +75,18 @@ interface UiState {
   setOllamaAvailable: (val: boolean) => void;
   setWordCount: (count: number) => void;
   setDarkMode: (val: boolean) => void;
+  setShowHeatMap: (val: boolean) => void;
+  setCurrentFilePath: (path: string | null) => void;
+  setIsDirty: (val: boolean) => void;
+  setShowNewPuzzleDialog: (show: boolean) => void;
+  setShowExportDialog: (show: boolean) => void;
+  setShowSettingsDialog: (show: boolean) => void;
+  setShowInstallModelsDialog: (show: boolean) => void;
+  setContextMenu: (menu: { x: number; y: number; row: number; col: number } | null) => void;
+  setRebusMode: (val: boolean) => void;
+  setGhostWord: (word: string | null) => void;
+  setShowShortcutOverlay: (val: boolean) => void;
+  setShowStatsPanel: (val: boolean) => void;
   moveSelection: (dRow: number, dCol: number, gridSize: number) => void;
   advanceCursor: (gridSize: number, cells: { is_black: boolean }[][]) => void;
   retreatCursor: (gridSize: number, cells: { is_black: boolean }[][]) => void;
@@ -67,6 +107,18 @@ export const useUiStore = create<UiState>()((set, get) => ({
   ollamaAvailable: false,
   wordCount: 0,
   darkMode: true,
+  showHeatMap: false,
+  currentFilePath: null,
+  isDirty: false,
+  showNewPuzzleDialog: false,
+  showExportDialog: false,
+  showSettingsDialog: false,
+  showInstallModelsDialog: false,
+  contextMenu: null,
+  rebusMode: false,
+  ghostWord: null,
+  showShortcutOverlay: false,
+  showStatsPanel: false,
 
   selectCell: (row, col) => set({ selectedRow: row, selectedCol: col }),
   setDirection: (dir) => set({ direction: dir }),
@@ -83,6 +135,18 @@ export const useUiStore = create<UiState>()((set, get) => ({
   setOllamaAvailable: (val) => set({ ollamaAvailable: val }),
   setWordCount: (count) => set({ wordCount: count }),
   setDarkMode: (val) => set({ darkMode: val }),
+  setShowHeatMap: (val) => set({ showHeatMap: val }),
+  setCurrentFilePath: (path) => set({ currentFilePath: path }),
+  setIsDirty: (val) => set({ isDirty: val }),
+  setShowNewPuzzleDialog: (show) => set({ showNewPuzzleDialog: show }),
+  setShowExportDialog: (show) => set({ showExportDialog: show }),
+  setShowSettingsDialog: (show) => set({ showSettingsDialog: show }),
+  setShowInstallModelsDialog: (show) => set({ showInstallModelsDialog: show }),
+  setContextMenu: (menu) => set({ contextMenu: menu }),
+  setRebusMode: (val) => set({ rebusMode: val }),
+  setGhostWord: (word) => set({ ghostWord: word }),
+  setShowShortcutOverlay: (val) => set({ showShortcutOverlay: val }),
+  setShowStatsPanel: (val) => set({ showStatsPanel: val }),
 
   moveSelection: (dRow, dCol, gridSize) => {
     const { selectedRow, selectedCol } = get();

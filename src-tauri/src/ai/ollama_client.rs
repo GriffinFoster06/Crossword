@@ -4,6 +4,7 @@
 /// All AI features degrade gracefully when Ollama is not available.
 
 use serde::{Serialize, Deserialize};
+use futures_util::StreamExt;
 
 const DEFAULT_URL: &str = "http://localhost:11434";
 
@@ -120,6 +121,72 @@ impl OllamaClient {
 
         let gen: GenerateResponse = resp.json().await?;
         Ok(gen.response)
+    }
+
+    /// Generate a completion with streaming token callbacks.
+    /// `on_token` is called for each token chunk as it arrives.
+    /// Returns the full accumulated response.
+    pub async fn generate_streaming<F>(
+        &self,
+        model: &str,
+        system: &str,
+        prompt: &str,
+        temperature: f32,
+        mut on_token: F,
+    ) -> anyhow::Result<String>
+    where
+        F: FnMut(String),
+    {
+        let req = GenerateRequest {
+            model: model.to_string(),
+            prompt: prompt.to_string(),
+            system: system.to_string(),
+            stream: true,
+            options: GenerateOptions {
+                temperature,
+                num_predict: 2048,
+            },
+        };
+
+        let resp = self.client
+            .post(format!("{}/api/generate", self.base_url))
+            .json(&req)
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Ollama error ({}): {}", status, body);
+        }
+
+        let mut stream = resp.bytes_stream();
+        let mut full_response = String::new();
+        let mut line_buf = String::new();
+
+        while let Some(chunk) = stream.next().await {
+            let bytes = chunk?;
+            let text = String::from_utf8_lossy(&bytes);
+            line_buf.push_str(&text);
+
+            // Ollama streams NDJSON: one JSON object per line
+            while let Some(newline_pos) = line_buf.find('\n') {
+                let line = line_buf[..newline_pos].trim().to_string();
+                line_buf = line_buf[newline_pos + 1..].to_string();
+
+                if line.is_empty() { continue; }
+
+                if let Ok(gen) = serde_json::from_str::<GenerateResponse>(&line) {
+                    if !gen.response.is_empty() {
+                        on_token(gen.response.clone());
+                        full_response.push_str(&gen.response);
+                    }
+                    if gen.done { break; }
+                }
+            }
+        }
+
+        Ok(full_response)
     }
 
     /// Pick the best available model for crossword tasks.

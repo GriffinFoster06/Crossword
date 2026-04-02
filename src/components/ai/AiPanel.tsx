@@ -1,11 +1,16 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { usePuzzleStore } from '../../stores/puzzleStore';
 import { useUiStore } from '../../stores/uiStore';
-import { generateClues, developTheme, getClueHistory } from '../../lib/tauriCommands';
+import {
+  generateClues, developTheme, getClueHistory, batchGenerateClues, evaluateFill,
+} from '../../lib/tauriCommands';
 import type { ClueCandidate, ThemeSuggestion, ClueHistoryEntry } from '../../types/crossword';
+import type { BatchClueResult } from '../../lib/tauriCommands';
+
+type AiTab = 'clues' | 'batch' | 'theme' | 'history';
 
 export function AiPanel() {
-  const [tab, setTab] = useState<'clues' | 'theme' | 'history'>('clues');
+  const [tab, setTab] = useState<AiTab>('clues');
 
   return (
     <div className="ai-panel">
@@ -14,15 +19,19 @@ export function AiPanel() {
         <button className={`ai-tab ${tab === 'clues' ? 'active' : ''}`} onClick={() => setTab('clues')}>
           Clue Writer
         </button>
+        <button className={`ai-tab ${tab === 'batch' ? 'active' : ''}`} onClick={() => setTab('batch')}>
+          Generate All
+        </button>
         <button className={`ai-tab ${tab === 'theme' ? 'active' : ''}`} onClick={() => setTab('theme')}>
           Theme Dev
         </button>
         <button className={`ai-tab ${tab === 'history' ? 'active' : ''}`} onClick={() => setTab('history')}>
-          Clue History
+          History
         </button>
       </div>
 
       {tab === 'clues' && <ClueWriterTab />}
+      {tab === 'batch' && <BatchClueTab />}
       {tab === 'theme' && <ThemeTab />}
       {tab === 'history' && <ClueHistoryTab />}
     </div>
@@ -79,10 +88,7 @@ function ClueWriterTab() {
         <div className="ai-offline">
           AI features require Ollama running locally.
           <br />
-          <a href="https://ollama.ai" target="_blank" rel="noopener">
-            Install Ollama
-          </a>
-          , then run: <code>ollama pull phi4</code>
+          Install Ollama, then run: <code>ollama pull phi4</code>
         </div>
       </div>
     );
@@ -109,11 +115,7 @@ function ClueWriterTab() {
             <option value={6}>Saturday</option>
           </select>
         </div>
-        <button
-          className="ai-btn"
-          onClick={handleGenerate}
-          disabled={!isComplete || loading}
-        >
+        <button className="ai-btn" onClick={handleGenerate} disabled={!isComplete || loading}>
           {loading ? 'Generating...' : 'Generate Clues'}
         </button>
       </div>
@@ -126,6 +128,143 @@ function ClueWriterTab() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function BatchClueTab() {
+  const slots = usePuzzleStore((s) => s.slots);
+  const setClue = usePuzzleStore((s) => s.setClue);
+  const ollamaAvailable = useUiStore((s) => s.ollamaAvailable);
+
+  const [difficulty, setDifficulty] = useState(3);
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [results, setResults] = useState<BatchClueResult[]>([]);
+  const [evalText, setEvalText] = useState('');
+  const [evalLoading, setEvalLoading] = useState(false);
+  const cancelRef = useRef(false);
+
+  const completedSlots = useMemo(
+    () => slots.filter(s => !s.pattern.includes('_') && s.pattern.length >= 3),
+    [slots]
+  );
+
+  const handleGenerateAll = async () => {
+    if (!ollamaAvailable || completedSlots.length === 0) return;
+    cancelRef.current = false;
+    setRunning(true);
+    setProgress(0);
+    setTotal(completedSlots.length);
+    setResults([]);
+
+    const words = completedSlots.map(s => ({
+      number: s.number,
+      direction: s.direction,
+      answer: s.pattern,
+    }));
+
+    try {
+      await batchGenerateClues(words, difficulty, (idx, tot, result) => {
+        setProgress(idx + 1);
+        setTotal(tot);
+        setResults(prev => [...prev, result]);
+        // Apply the clue immediately
+        setClue(result.number, result.direction as 'Across' | 'Down', result.clue);
+      });
+    } catch (e) {
+      console.error('Batch clue generation failed:', e);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const handleEvaluate = async () => {
+    const words = completedSlots.map(s => s.pattern);
+    if (words.length === 0) return;
+    setEvalLoading(true);
+    try {
+      const text = await evaluateFill(words, []);
+      setEvalText(text);
+    } catch (e) {
+      setEvalText('Evaluation failed');
+    } finally {
+      setEvalLoading(false);
+    }
+  };
+
+  if (!ollamaAvailable) {
+    return (
+      <div className="ai-tab-content">
+        <div className="ai-offline">AI features require Ollama running locally.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="ai-tab-content">
+      <div className="ai-controls">
+        <div className="ai-batch-info">
+          {completedSlots.length} completed words ready for clue generation
+        </div>
+        <div className="ai-difficulty">
+          <label>Difficulty:</label>
+          <select value={difficulty} onChange={(e) => setDifficulty(Number(e.target.value))}>
+            <option value={1}>Monday</option>
+            <option value={2}>Tuesday</option>
+            <option value={3}>Wednesday</option>
+            <option value={4}>Thursday</option>
+            <option value={5}>Friday</option>
+            <option value={6}>Saturday</option>
+          </select>
+        </div>
+        <div className="ai-btn-row">
+          <button
+            className="ai-btn"
+            onClick={handleGenerateAll}
+            disabled={running || completedSlots.length === 0}
+          >
+            {running ? `Generating... (${progress}/${total})` : 'Generate All Clues'}
+          </button>
+          <button
+            className="ai-btn ai-btn-secondary"
+            onClick={handleEvaluate}
+            disabled={evalLoading || completedSlots.length === 0}
+          >
+            {evalLoading ? 'Evaluating...' : 'Evaluate Fill'}
+          </button>
+        </div>
+      </div>
+
+      {running && total > 0 && (
+        <div className="ai-progress-bar">
+          <div
+            className="ai-progress-fill"
+            style={{ width: `${(progress / total) * 100}%` }}
+          />
+          <span className="ai-progress-label">{progress} / {total}</span>
+        </div>
+      )}
+
+      {evalText && (
+        <div className="ai-eval-result">
+          <strong>Fill Evaluation:</strong>
+          <p>{evalText}</p>
+        </div>
+      )}
+
+      {results.length > 0 && (
+        <div className="ai-results">
+          {results.map((r, i) => (
+            <div key={i} className="ai-batch-result">
+              <span className="ai-batch-num">{r.number}{r.direction[0]}</span>
+              <span className="ai-batch-answer">{r.answer}</span>
+              <span className="ai-batch-clue">{r.clue}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

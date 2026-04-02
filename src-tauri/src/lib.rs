@@ -19,13 +19,25 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            // Load word database from bundled resource
+            // Load word database — check user app data dir first, then bundled resource
             let resource_path = app
                 .path()
                 .resource_dir()
                 .expect("failed to resolve resource dir");
 
-            let wordlist_path = resource_path.join("wordlist.bin");
+            let app_data_path = app
+                .path()
+                .app_data_dir()
+                .unwrap_or_else(|_| resource_path.clone());
+
+            // User can override bundled wordlist by placing wordlist.bin in app data dir
+            let user_wordlist = app_data_path.join("wordlist.bin");
+            let wordlist_path = if user_wordlist.exists() {
+                log::info!("Using user wordlist from {:?}", user_wordlist);
+                user_wordlist
+            } else {
+                resource_path.join("wordlist.bin")
+            };
             let word_db = if wordlist_path.exists() {
                 log::info!("Loading word database from {:?}", wordlist_path);
                 match WordDatabase::load_binary(&wordlist_path) {
@@ -67,11 +79,19 @@ pub fn run() {
             commands::fileio::cmd_export_puz,
             commands::fileio::cmd_import_puz,
             commands::fileio::cmd_export_pdf,
+            commands::fileio::cmd_export_nyt,
             commands::ai::cmd_check_ollama,
             commands::ai::cmd_generate_clues,
+            commands::ai::cmd_batch_generate_clues,
             commands::ai::cmd_develop_theme,
             commands::ai::cmd_suggest_words,
+            commands::ai::cmd_construct_grid,
+            commands::ai::cmd_parse_puzzle_request,
+            commands::ai::cmd_evaluate_fill,
             commands::ai::cmd_get_clue_history,
+            commands::ai::cmd_stream_ai_response,
+            commands::ai::cmd_check_crossforge_models,
+            commands::ai::cmd_install_models,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

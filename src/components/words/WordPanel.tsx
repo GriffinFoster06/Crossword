@@ -12,10 +12,12 @@ export function WordPanel() {
   const selectedRow = useUiStore((s) => s.selectedRow);
   const selectedCol = useUiStore((s) => s.selectedCol);
   const direction = useUiStore((s) => s.direction);
+  const setGhostWord = useUiStore((s) => s.setGhostWord);
   const [words, setWords] = useState<WordMatch[]>([]);
   const [loading, setLoading] = useState(false);
   const [sortBy, setSortBy] = useState<'score' | 'alpha'>('score');
   const [minScore, setMinScore] = useState(0);
+  const [regexFilter, setRegexFilter] = useState('');
 
   // Find the active slot
   const activeSlot = useMemo(() => {
@@ -66,11 +68,17 @@ export function WordPanel() {
 
   const filteredWords = useMemo(() => {
     let filtered = words.filter(w => w.score >= minScore);
+    if (regexFilter) {
+      try {
+        const re = new RegExp(regexFilter, 'i');
+        filtered = filtered.filter(w => re.test(w.word));
+      } catch { /* invalid regex — ignore */ }
+    }
     if (sortBy === 'alpha') {
       filtered = [...filtered].sort((a, b) => a.word.localeCompare(b.word));
     }
     return filtered;
-  }, [words, sortBy, minScore]);
+  }, [words, sortBy, minScore, regexFilter]);
 
   const placeWord = (word: string) => {
     if (!activeSlot) return;
@@ -114,6 +122,16 @@ export function WordPanel() {
           />
         </label>
       </div>
+      <div className="word-regex-row">
+        <input
+          className="word-regex-input"
+          type="text"
+          placeholder="Filter regex (e.g. ^ST)"
+          value={regexFilter}
+          onChange={(e) => setRegexFilter(e.target.value)}
+          spellCheck={false}
+        />
+      </div>
 
       <div className="word-list">
         {!pattern || pattern.length < 3 ? (
@@ -126,6 +144,8 @@ export function WordPanel() {
               key={w.word}
               className="word-item"
               onClick={() => placeWord(w.word)}
+              onMouseEnter={() => setGhostWord(w.word)}
+              onMouseLeave={() => setGhostWord(null)}
               title={`Score: ${w.score}`}
             >
               <span className="word-text">{w.word}</span>

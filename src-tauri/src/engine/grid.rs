@@ -128,6 +128,20 @@ impl GridState {
         }
     }
 
+    /// Check whether the grid has 180° rotational symmetry.
+    pub fn has_180_symmetry(&self) -> bool {
+        for r in 0..self.size {
+            for c in 0..self.size {
+                let sym_r = self.size - 1 - r;
+                let sym_c = self.size - 1 - c;
+                if self.cells[r][c].is_black != self.cells[sym_r][sym_c].is_black {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
     /// Set a letter in a cell.
     pub fn set_letter(&mut self, row: usize, col: usize, letter: Option<char>) {
         if let Some(cell) = self.get_mut(row, col) {
@@ -356,5 +370,123 @@ impl GridState {
 
     pub fn black_cell_count(&self) -> usize {
         self.cells.iter().flatten().filter(|c| c.is_black).count()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_grid(size: usize) -> GridState {
+        let mut g = GridState::new(size);
+        g.compute_numbers();
+        g
+    }
+
+    #[test]
+    fn test_cell_numbering_empty_3x3() {
+        let mut g = GridState::new(3);
+        g.compute_numbers();
+        // Top-left cell starts both an Across and Down word → number 1
+        assert_eq!(g.cells[0][0].number, Some(1));
+        // Middle cell starts a Down word (if no black squares it does not start across)
+        // In a fully white 3×3: 0,0=1 (A+D), 0,1=2 (D only), 0,2=3 (A+D)... wait:
+        // 0,0: starts_across (left edge, right neighbor white, size≥2) ✓, starts_down ✓ → 1
+        // 0,1: starts_across? left not black = false. starts_down? top edge ✓, bottom white ✓ → 2
+        // 0,2: starts_across? col+1=3=size, no right neighbor → false. starts_down ✓ → 3
+        // 1,0: starts_across ✓ (left edge, right white) → 4. starts_down? top not black → false → 4
+        // 1,2: starts_across? left[1,1] not black → false. starts_down? top[0,2] not black → false → no number
+        // 2,0: starts_across ✓ → 5. starts_down? bottom = row+1=3=size → false → 5
+        assert_eq!(g.cells[0][1].number, Some(2));
+        assert_eq!(g.cells[0][2].number, Some(3));
+        assert_eq!(g.cells[1][0].number, Some(4));
+        assert_eq!(g.cells[1][2].number, None);
+        assert_eq!(g.cells[2][0].number, Some(5));
+    }
+
+    #[test]
+    fn test_toggle_black_symmetric() {
+        let mut g = GridState::new(5);
+        g.toggle_black(0, 0, true);
+        assert!(g.cells[0][0].is_black);
+        // Symmetric partner: (4, 4)
+        assert!(g.cells[4][4].is_black);
+        // Toggle back
+        g.toggle_black(0, 0, true);
+        assert!(!g.cells[0][0].is_black);
+        assert!(!g.cells[4][4].is_black);
+    }
+
+    #[test]
+    fn test_toggle_black_no_symmetry() {
+        let mut g = GridState::new(5);
+        g.toggle_black(1, 1, false);
+        assert!(g.cells[1][1].is_black);
+        assert!(!g.cells[3][3].is_black); // symmetric partner not affected
+    }
+
+    #[test]
+    fn test_set_letter_uppercase() {
+        let mut g = GridState::new(3);
+        g.set_letter(0, 0, Some('a'));
+        assert_eq!(g.cells[0][0].letter, Some('A'));
+    }
+
+    #[test]
+    fn test_set_letter_on_black_noop() {
+        let mut g = GridState::new(3);
+        g.toggle_black(0, 0, false);
+        g.set_letter(0, 0, Some('X'));
+        assert_eq!(g.cells[0][0].letter, None);
+    }
+
+    #[test]
+    fn test_get_slots_empty_3x3() {
+        let mut g = GridState::new(3);
+        g.compute_numbers();
+        let slots = g.get_slots();
+        // All-white 3×3: 3 across + 3 down = 6 slots of length 3
+        assert_eq!(slots.len(), 6);
+        assert!(slots.iter().all(|s| s.length == 3));
+    }
+
+    #[test]
+    fn test_connectivity_all_white() {
+        let g = GridState::new(5);
+        let reachable = g.connected_white_cells();
+        let total = g.total_white_cells();
+        assert_eq!(reachable, total);
+    }
+
+    #[test]
+    fn test_has_symmetry_empty_grid() {
+        let g = GridState::new(5);
+        assert!(g.has_180_symmetry());
+    }
+
+    #[test]
+    fn test_has_symmetry_symmetric_black() {
+        let mut g = GridState::new(5);
+        g.toggle_black(0, 1, false);
+        g.toggle_black(4, 3, false); // symmetric partner of (0,1) in 5×5
+        assert!(g.has_180_symmetry());
+    }
+
+    #[test]
+    fn test_slot_pattern_with_letters() {
+        let mut g = GridState::new(3);
+        g.compute_numbers();
+        g.set_letter(0, 0, Some('C'));
+        g.set_letter(0, 2, Some('T'));
+        let slots = g.get_slots();
+        let row0_across = slots.iter().find(|s| s.direction == Direction::Across && s.row == 0).unwrap();
+        assert_eq!(row0_across.pattern, "C_T");
+    }
+
+    #[test]
+    fn test_effective_letter_rebus() {
+        let mut c = Cell::white();
+        c.rebus = Some("STAR".to_string());
+        assert_eq!(c.effective_letter(), Some('S'));
     }
 }

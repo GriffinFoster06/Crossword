@@ -125,6 +125,7 @@ interface PuzzleState {
   // Actions
   newPuzzle: (size: number) => void;
   setCell: (row: number, col: number, letter: string | null) => void;
+  setCellRebus: (row: number, col: number, value: string) => void;
   toggleBlack: (row: number, col: number) => void;
   toggleCircle: (row: number, col: number) => void;
   toggleShade: (row: number, col: number) => void;
@@ -174,6 +175,22 @@ export const usePuzzleStore = create<PuzzleState>()(
         const next = cells.map(r => r.map(c => ({ ...c })));
         if (!next[row][col].is_black) {
           next[row][col].letter = letter ? letter.toUpperCase() : null;
+          next[row][col].rebus = null;
+        }
+        set({ cells: next, slots: getSlots(next, size) });
+      },
+
+      setCellRebus: (row, col, value) => {
+        const { cells, size } = get();
+        const next = cells.map(r => r.map(c => ({ ...c })));
+        if (!next[row][col].is_black) {
+          if (value.length === 1) {
+            next[row][col].letter = value;
+            next[row][col].rebus = null;
+          } else {
+            next[row][col].rebus = value;
+            next[row][col].letter = value[0]; // keep first letter for slot matching
+          }
         }
         set({ cells: next, slots: getSlots(next, size) });
       },
