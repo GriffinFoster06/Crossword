@@ -13,10 +13,11 @@ import { NewPuzzleDialog } from './components/dialogs/NewPuzzleDialog';
 import { ExportDialog } from './components/dialogs/ExportDialog';
 import { SettingsDialog } from './components/dialogs/SettingsDialog';
 import { InstallModelsDialog } from './components/dialogs/InstallModelsDialog';
+import { SetupWizard } from './components/dialogs/SetupWizard';
 import { RebusModal } from './components/dialogs/RebusModal';
 import { ShortcutOverlay } from './components/dialogs/ShortcutOverlay';
 import { StatsPanel } from './components/stats/StatsPanel';
-import { checkOllama, getWordCount, savePuzzle, checkCrossforgeModels } from './lib/tauriCommands';
+import { getSetupStatus, getWordCount, savePuzzle, checkCrossforgeModels } from './lib/tauriCommands';
 
 export default function App() {
   useKeyboard();
@@ -39,6 +40,7 @@ export default function App() {
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [gridDimensions, setGridDimensions] = useState({ width: 600, height: 600 });
   const [installedCrossforgeModels, setInstalledCrossforgeModels] = useState<string[]>([]);
+  const [showSetupWizard, setShowSetupWizard] = useState(false);
 
   const measureGrid = useCallback(() => {
     if (gridContainerRef.current) {
@@ -56,19 +58,25 @@ export default function App() {
   }, [measureGrid]);
 
   useEffect(() => {
-    checkOllama().then(async (status) => {
-      setOllamaAvailable(status.available);
-      if (status.available) {
-        const installed = await checkCrossforgeModels();
-        setInstalledCrossforgeModels(installed);
-        // Show install dialog on first run if any CrossForge model is missing
-        const alreadyPrompted = localStorage.getItem('crossforge_model_install_prompted');
-        if (!alreadyPrompted && installed.length < 5) {
-          localStorage.setItem('crossforge_model_install_prompted', '1');
-          setShowInstallModelsDialog(true);
+    // Check setup status on first launch
+    const hasCompletedSetup = localStorage.getItem('crossforge_setup_complete');
+    if (!hasCompletedSetup) {
+      setShowSetupWizard(true);
+    } else {
+      // Re-check Ollama status for returning users
+      getSetupStatus().then((status) => {
+        setOllamaAvailable(status.ollama_running);
+        if (status.ollama_running) {
+          const installed = status.crossforge_models_installed
+            .map((v, i) => v ? `crossforge-model-${i}` : null)
+            .filter(Boolean) as string[];
+          setInstalledCrossforgeModels(installed);
+          if (installed.length < 5) {
+            setShowInstallModelsDialog(true);
+          }
         }
-      }
-    });
+      });
+    }
     getWordCount().then((count) => setWordCount(count));
   }, []);
 
@@ -154,6 +162,16 @@ export default function App() {
       {showStatsPanel && <StatsPanel />}
       {showInstallModelsDialog && (
         <InstallModelsDialog installedModels={installedCrossforgeModels} />
+      )}
+      {showSetupWizard && (
+        <SetupWizard
+          onComplete={() => {
+            setShowSetupWizard(false);
+            localStorage.setItem('crossforge_setup_complete', '1');
+            // Re-check Ollama now that setup is done
+            getSetupStatus().then((status) => setOllamaAvailable(status.ollama_running));
+          }}
+        />
       )}
       {rebusMode && <RebusModal />}
       {showShortcutOverlay && <ShortcutOverlay />}

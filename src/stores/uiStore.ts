@@ -168,7 +168,7 @@ export const useUiStore = create<UiState>()((set, get) => ({
     }
   },
 
-  retreatCursor: (gridSize, cells) => {
+  retreatCursor: (_gridSize, cells) => {
     const { selectedRow, selectedCol, direction } = get();
     if (direction === 'Across') {
       let nc = selectedCol - 1;

@@ -43,7 +43,6 @@ function saveSettings(s: Settings) {
 export function SettingsDialog() {
   const darkMode = useUiStore((s) => s.darkMode);
   const setDarkMode = useUiStore((s) => s.setDarkMode);
-  const ollamaAvailable = useUiStore((s) => s.ollamaAvailable);
   const wordCount = useUiStore((s) => s.wordCount);
   const setShowSettingsDialog = useUiStore((s) => s.setShowSettingsDialog);
   const setShowInstallModelsDialog = useUiStore((s) => s.setShowInstallModelsDialog);

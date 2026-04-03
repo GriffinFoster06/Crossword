@@ -29,10 +29,15 @@ function ensureTauri(): Promise<boolean> {
   return tauriReady;
 }
 
+const TAURI_TIMEOUT_MS = 30_000;
+
 async function callTauri<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   await ensureTauri();
   if (!invoke) throw new Error('Not running in Tauri');
-  return invoke(cmd, args) as Promise<T>;
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`Tauri command "${cmd}" timed out after ${TAURI_TIMEOUT_MS}ms`)), TAURI_TIMEOUT_MS)
+  );
+  return Promise.race([invoke(cmd, args) as Promise<T>, timeoutPromise]);
 }
 
 // --- Word Database ---
@@ -83,7 +88,11 @@ export async function startAutofill(
   await ensureTauri();
   let unlisten: (() => void) | null = null;
   if (listen && onProgress) {
-    unlisten = await listen('autofill-progress', (e) => onProgress(e.payload));
+    unlisten = await listen('autofill-progress', (e) => {
+      if (e.payload !== null && typeof e.payload === 'object') {
+        onProgress(e.payload);
+      }
+    });
   }
   try {
     return await callTauri<AutofillResult>('cmd_start_autofill', { grid, options });
@@ -248,6 +257,53 @@ export async function parsePuzzleRequest(request: string): Promise<PuzzleRequest
 
 export async function evaluateFill(words: string[], themeEntries: string[]): Promise<string> {
   return callTauri('cmd_evaluate_fill', { words, themeEntries });
+}
+
+export interface SetupStatus {
+  ollama_running: boolean;
+  base_model: string;
+  base_model_installed: boolean;
+  crossforge_models_installed: boolean[];
+}
+
+export async function getSetupStatus(): Promise<SetupStatus> {
+  try {
+    return await callTauri<SetupStatus>('cmd_get_setup_status');
+  } catch {
+    return {
+      ollama_running: false,
+      base_model: 'phi3:mini',
+      base_model_installed: false,
+      crossforge_models_installed: [false, false, false, false, false],
+    };
+  }
+}
+
+export async function startOllama(): Promise<void> {
+  try {
+    await callTauri<void>('cmd_start_ollama');
+  } catch {
+    // Non-fatal — Ollama may already be running or sidecar not bundled in dev
+  }
+}
+
+export async function pullModel(
+  model: string,
+  onProgress?: (status: string, completed: number, total: number) => void,
+): Promise<void> {
+  await ensureTauri();
+  let unlisten: (() => void) | null = null;
+  if (listen && onProgress) {
+    unlisten = await listen('model-pull-progress', (e: { payload: unknown }) => {
+      const p = e.payload as { status: string; completed: number; total: number };
+      onProgress(p.status, p.completed, p.total);
+    });
+  }
+  try {
+    await callTauri<void>('cmd_pull_model', { model });
+  } finally {
+    unlisten?.();
+  }
 }
 
 export async function checkCrossforgeModels(): Promise<string[]> {

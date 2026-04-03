@@ -12,7 +12,6 @@ export function RebusModal() {
   const selectedCol = useUiStore((s) => s.selectedCol);
   const setRebusMode = useUiStore((s) => s.setRebusMode);
   const cells = usePuzzleStore((s) => s.cells);
-  const setCell = usePuzzleStore((s) => s.setCell);
   const size = usePuzzleStore((s) => s.size);
 
   const inputRef = useRef<HTMLInputElement>(null);

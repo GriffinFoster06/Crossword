@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { temporal } from 'zundo';
-import type { Cell, GridState, ClueData, PuzzleClues, PuzzleMetadata, ThemeData, Direction } from '../types/crossword';
+import type { Cell, GridState, PuzzleClues, PuzzleMetadata, ThemeData, Direction } from '../types/crossword';
 
 function createEmptyCell(): Cell {
   return {

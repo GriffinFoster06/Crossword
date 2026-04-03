@@ -64,15 +64,12 @@ export function Toolbar() {
     }
   };
 
-  // Undo/Redo
-  const undo = () => {
-    const store = usePuzzleStore as any;
-    store.temporal?.getState()?.undo();
-  };
-  const redo = () => {
-    const store = usePuzzleStore as any;
-    store.temporal?.getState()?.redo();
-  };
+  // Undo/Redo — zundo attaches a `.temporal` property to the store
+  interface TemporalActions { undo: () => void; redo: () => void }
+  interface StoreWithTemporal { temporal?: { getState: () => TemporalActions } }
+  const temporalStore = (usePuzzleStore as unknown as StoreWithTemporal).temporal;
+  const undo = () => temporalStore?.getState()?.undo();
+  const redo = () => temporalStore?.getState()?.redo();
 
   const fileName = currentFilePath ? currentFilePath.split('/').pop() : null;
 

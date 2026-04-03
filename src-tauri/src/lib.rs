@@ -2,23 +2,27 @@ pub mod commands;
 pub mod engine;
 pub mod formats;
 pub mod ai;
+pub mod ollama_process;
 
 use tauri::Manager;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 pub use engine::worddb::WordDatabase;
 
 pub struct AppState {
     pub word_db: Arc<WordDatabase>,
     pub clue_db_path: std::path::PathBuf,
+    pub ollama_child: ollama_process::OllamaChild,
 }
 
 pub fn run() {
+    let ollama_child: ollama_process::OllamaChild = Arc::new(Mutex::new(None));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
-        .setup(|app| {
+        .setup(move |app| {
             // Load word database — check user app data dir first, then bundled resource
             let resource_path = app
                 .path()
@@ -60,9 +64,27 @@ pub fn run() {
             app.manage(AppState {
                 word_db: Arc::new(word_db),
                 clue_db_path,
+                ollama_child: ollama_child.clone(),
+            });
+
+            // Start Ollama in the background — non-blocking; frontend polls setup status
+            let app_handle = app.handle().clone();
+            let child_arc = ollama_child.clone();
+            tauri::async_runtime::spawn(async move {
+                match ollama_process::ensure_ollama_running(&app_handle, &child_arc).await {
+                    Ok(()) => log::info!("Ollama is running"),
+                    Err(e) => log::warn!("Ollama not available: {e}"),
+                }
             });
 
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                // Kill the bundled Ollama sidecar when the app window closes
+                let state = window.state::<AppState>();
+                ollama_process::stop_ollama(&state.ollama_child);
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::worddb::cmd_query_words,
@@ -92,6 +114,9 @@ pub fn run() {
             commands::ai::cmd_stream_ai_response,
             commands::ai::cmd_check_crossforge_models,
             commands::ai::cmd_install_models,
+            commands::ai::cmd_start_ollama,
+            commands::ai::cmd_pull_model,
+            commands::ai::cmd_get_setup_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

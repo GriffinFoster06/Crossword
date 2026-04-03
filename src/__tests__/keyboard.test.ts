@@ -16,12 +16,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { usePuzzleStore } from '../stores/puzzleStore';
 import { useUiStore } from '../stores/uiStore';
 
-// ── helpers ──────────────────────────────────────────────────────────────────
-
-function key(k: string, opts: Partial<KeyboardEventInit> = {}) {
-  return new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...opts });
-}
-
 beforeEach(() => {
   usePuzzleStore.getState().newPuzzle(15);
   useUiStore.getState().selectCell(7, 7);

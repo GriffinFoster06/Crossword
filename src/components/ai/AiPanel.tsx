@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { usePuzzleStore } from '../../stores/puzzleStore';
 import { useUiStore } from '../../stores/uiStore';
 import {
@@ -48,6 +48,7 @@ function ClueWriterTab() {
 
   const [candidates, setCandidates] = useState<ClueCandidate[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [difficulty, setDifficulty] = useState(3);
 
   const activeSlot = useMemo(() => {
@@ -66,11 +67,13 @@ function ClueWriterTab() {
   const handleGenerate = async () => {
     if (!isComplete) return;
     setLoading(true);
+    setError(null);
     try {
       const clues = await generateClues(answer, difficulty);
       setCandidates(clues);
     } catch (e) {
-      console.error('Clue generation failed:', e);
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(`Clue generation failed: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -120,6 +123,7 @@ function ClueWriterTab() {
         </button>
       </div>
 
+      {error && <div className="ai-error">{error}</div>}
       <div className="ai-results">
         {candidates.map((c, i) => (
           <div key={i} className="ai-clue-candidate" onClick={() => handleUseClue(c.text)}>
@@ -142,6 +146,7 @@ function BatchClueTab() {
   const [progress, setProgress] = useState(0);
   const [total, setTotal] = useState(0);
   const [results, setResults] = useState<BatchClueResult[]>([]);
+  const [batchError, setBatchError] = useState<string | null>(null);
   const [evalText, setEvalText] = useState('');
   const [evalLoading, setEvalLoading] = useState(false);
   const cancelRef = useRef(false);
@@ -158,6 +163,7 @@ function BatchClueTab() {
     setProgress(0);
     setTotal(completedSlots.length);
     setResults([]);
+    setBatchError(null);
 
     const words = completedSlots.map(s => ({
       number: s.number,
@@ -174,7 +180,8 @@ function BatchClueTab() {
         setClue(result.number, result.direction as 'Across' | 'Down', result.clue);
       });
     } catch (e) {
-      console.error('Batch clue generation failed:', e);
+      const msg = e instanceof Error ? e.message : String(e);
+      setBatchError(`Batch generation failed: ${msg}`);
     } finally {
       setRunning(false);
     }
@@ -237,6 +244,8 @@ function BatchClueTab() {
         </div>
       </div>
 
+      {batchError && <div className="ai-error">{batchError}</div>}
+
       {running && total > 0 && (
         <div className="ai-progress-bar">
           <div
@@ -278,14 +287,18 @@ function ThemeTab() {
   const [suggestion, setSuggestion] = useState<ThemeSuggestion | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const [error, setError] = useState<string | null>(null);
+
   const handleDevelop = async () => {
     if (!seed.trim()) return;
     setLoading(true);
+    setError(null);
     try {
       const result = await developTheme(seed, size);
       setSuggestion(result);
     } catch (e) {
-      console.error('Theme development failed:', e);
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(`Theme development failed: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -326,6 +339,8 @@ function ThemeTab() {
         </button>
       </div>
 
+      {error && <div className="ai-error">{error}</div>}
+
       {suggestion && (
         <div className="ai-theme-result">
           <h4>{suggestion.description}</h4>
@@ -363,6 +378,7 @@ function ClueHistoryTab() {
 
   const [history, setHistory] = useState<ClueHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [searchWord, setSearchWord] = useState('');
 
   const activeSlot = useMemo(() => {
@@ -380,11 +396,13 @@ function ClueHistoryTab() {
     if (!w || w.includes('_')) return;
 
     setLoading(true);
+    setHistoryError(null);
     try {
       const entries = await getClueHistory(w);
       setHistory(entries);
     } catch (e) {
-      console.error('History lookup failed:', e);
+      const msg = e instanceof Error ? e.message : String(e);
+      setHistoryError(`History lookup failed: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -411,6 +429,8 @@ function ClueHistoryTab() {
           {loading ? 'Loading...' : 'Look Up'}
         </button>
       </div>
+
+      {historyError && <div className="ai-error">{historyError}</div>}
 
       <div className="ai-results">
         {history.length === 0 ? (

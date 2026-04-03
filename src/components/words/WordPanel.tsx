@@ -5,8 +5,6 @@ import { queryWords } from '../../lib/tauriCommands';
 import type { WordMatch } from '../../types/crossword';
 
 export function WordPanel() {
-  const cells = usePuzzleStore((s) => s.cells);
-  const size = usePuzzleStore((s) => s.size);
   const slots = usePuzzleStore((s) => s.slots);
   const setCell = usePuzzleStore((s) => s.setCell);
   const selectedRow = useUiStore((s) => s.selectedRow);

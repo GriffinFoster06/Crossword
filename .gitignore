@@ -10,5 +10,8 @@ src-tauri/target/
 build/
 data/raw/
 data/clues/
-models/
-resources/*.db
+models/training/
+models/fine-tuned/
+models/**/*.gguf
+src-tauri/binaries/*
+!src-tauri/binaries/.gitkeep

@@ -189,6 +189,57 @@ impl OllamaClient {
         Ok(full_response)
     }
 
+    /// Pull (download) a model from Ollama, streaming progress to a callback.
+    /// `on_progress(status, completed_bytes, total_bytes)` is called as data arrives.
+    pub async fn pull_model<F>(&self, model: &str, mut on_progress: F) -> anyhow::Result<()>
+    where
+        F: FnMut(String, u64, u64),
+    {
+        let resp = self
+            .client
+            .post(format!("{}/api/pull", self.base_url))
+            .timeout(std::time::Duration::from_secs(3600)) // 1 hour for large models
+            .json(&serde_json::json!({ "name": model, "stream": true }))
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Pull failed ({}): {}", status, body);
+        }
+
+        let mut stream = resp.bytes_stream();
+        let mut line_buf = String::new();
+
+        while let Some(chunk) = stream.next().await {
+            let bytes = chunk?;
+            let text = String::from_utf8_lossy(&bytes);
+            line_buf.push_str(&text);
+
+            while let Some(pos) = line_buf.find('\n') {
+                let line = line_buf[..pos].trim().to_string();
+                line_buf = line_buf[pos + 1..].to_string();
+
+                if line.is_empty() {
+                    continue;
+                }
+
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
+                    let status = val["status"].as_str().unwrap_or("").to_string();
+                    let completed = val["completed"].as_u64().unwrap_or(0);
+                    let total = val["total"].as_u64().unwrap_or(0);
+                    on_progress(status.clone(), completed, total);
+                    if status == "success" {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     /// Pick the best available model for crossword tasks.
     pub async fn best_available_model(&self) -> Option<String> {
         let models = self.list_models().await.ok()?;

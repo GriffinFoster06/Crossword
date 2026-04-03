@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; img-src 'self' data: blob:; connect-src 'self' http://localhost:11434; style-src 'self' 'unsafe-inline'; script-src 'self'"
     }
   },
   "bundle": {
@@ -37,14 +37,17 @@
     ],
     "resources": {
       "resources/*": "./"
-    }
+    },
+    "externalBin": [
+      "binaries/ollama"
+    ]
   },
   "plugins": {
     "shell": {
       "all": false,
-      "execute": false,
-      "sidecar": false,
-      "open": false
+      "execute": true,
+      "sidecar": true,
+      "open": true
     },
     "dialog": {},
     "fs": {

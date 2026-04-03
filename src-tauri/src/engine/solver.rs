@@ -65,8 +65,6 @@ pub struct Solver {
     cancel: Arc<AtomicBool>,
     /// Progress callback
     progress_tx: Option<tokio::sync::mpsc::UnboundedSender<AutofillProgress>>,
-    /// Quality config
-    min_word_score: u8,
     /// Timeout tracking
     start_time: std::time::Instant,
     timeout_secs: u64,
@@ -154,7 +152,6 @@ impl Solver {
             used_words: HashSet::new(),
             cancel,
             progress_tx,
-            min_word_score,
             start_time: std::time::Instant::now(),
             timeout_secs,
             backtracks: 0,

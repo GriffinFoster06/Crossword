@@ -415,6 +415,95 @@ pub async fn cmd_install_models(app_handle: tauri::AppHandle) -> Result<(), Stri
     Ok(())
 }
 
+/// The base AI model CrossForge downloads on first run.
+const BASE_MODEL: &str = "phi3:mini";
+
+/// Overall setup status — used by the first-run wizard.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SetupStatus {
+    pub ollama_running: bool,
+    pub base_model: String,
+    pub base_model_installed: bool,
+    pub crossforge_models_installed: Vec<bool>,
+}
+
+/// Returns the full setup status for the first-run wizard.
+#[tauri::command]
+pub async fn cmd_get_setup_status() -> SetupStatus {
+    let client = OllamaClient::new(None);
+    let ollama_running = client.is_available().await;
+
+    if !ollama_running {
+        return SetupStatus {
+            ollama_running: false,
+            base_model: BASE_MODEL.to_string(),
+            base_model_installed: false,
+            crossforge_models_installed: vec![false; CROSSFORGE_MODELS.len()],
+        };
+    }
+
+    let models: Vec<String> = client
+        .list_models()
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|m| m.name)
+        .collect();
+
+    let base_model_installed = models.iter().any(|m| m.contains("phi3") || m.contains("phi4"));
+
+    let crossforge_installed = CROSSFORGE_MODELS
+        .iter()
+        .map(|(name, _)| models.iter().any(|m| m.starts_with(name)))
+        .collect();
+
+    SetupStatus {
+        ollama_running: true,
+        base_model: BASE_MODEL.to_string(),
+        base_model_installed,
+        crossforge_models_installed: crossforge_installed,
+    }
+}
+
+/// Start the bundled Ollama sidecar (called from the setup wizard).
+/// No-op if Ollama is already running.
+#[tauri::command]
+pub async fn cmd_start_ollama(
+    app_handle: tauri::AppHandle,
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<(), String> {
+    crate::ollama_process::ensure_ollama_running(&app_handle, &state.ollama_child).await
+}
+
+/// Pull (download) an Ollama model, streaming progress as "model-pull-progress" events.
+/// Event payload: { status: string, completed: number, total: number }
+#[tauri::command]
+pub async fn cmd_pull_model(
+    model: String,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    use tauri::Emitter;
+
+    let client = OllamaClient::new(None);
+    if !client.is_available().await {
+        return Err("Ollama is not running. Cannot pull model.".to_string());
+    }
+
+    client
+        .pull_model(&model, move |status, completed, total| {
+            let _ = app_handle.emit(
+                "model-pull-progress",
+                serde_json::json!({
+                    "status": status,
+                    "completed": completed,
+                    "total": total,
+                }),
+            );
+        })
+        .await
+        .map_err(|e| format!("Failed to pull {model}: {e}"))
+}
+
 #[tauri::command]
 pub async fn cmd_get_clue_history(
     word: String,

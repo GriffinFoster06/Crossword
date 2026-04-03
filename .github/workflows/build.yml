@@ -3,6 +3,7 @@ name: Build
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
 
@@ -15,15 +16,19 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
             label: macOS (Apple Silicon)
+            ollama_asset: ollama-darwin
           - os: macos-13
             target: x86_64-apple-darwin
             label: macOS (Intel)
+            ollama_asset: ollama-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             label: Windows
+            ollama_asset: ollama-windows-amd64.zip
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             label: Linux
+            ollama_asset: ollama-linux-amd64
 
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
@@ -59,13 +64,61 @@ jobs:
         with:
           workspaces: src-tauri
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Install frontend dependencies
         run: npm ci
 
+      # ── Download bundled Ollama binary ────────────────────────────────────
+      - name: Download Ollama binary (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p src-tauri/binaries
+          curl -fsSL \
+            "https://github.com/ollama/ollama/releases/latest/download/${{ matrix.ollama_asset }}" \
+            -o "src-tauri/binaries/ollama-${{ matrix.target }}"
+          chmod +x "src-tauri/binaries/ollama-${{ matrix.target }}"
+
+      - name: Download Ollama binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path src-tauri\binaries
+          $url = "https://github.com/ollama/ollama/releases/latest/download/${{ matrix.ollama_asset }}"
+          Invoke-WebRequest -Uri $url -OutFile ollama.zip
+          Expand-Archive -Path ollama.zip -DestinationPath ollama-extract -Force
+          Copy-Item ollama-extract\ollama.exe "src-tauri\binaries\ollama-${{ matrix.target }}.exe"
+
+      - name: Download Ollama binary (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p src-tauri/binaries
+          curl -fsSL \
+            "https://github.com/ollama/ollama/releases/latest/download/${{ matrix.ollama_asset }}" \
+            -o "src-tauri/binaries/ollama-${{ matrix.target }}"
+          chmod +x "src-tauri/binaries/ollama-${{ matrix.target }}"
+
+      # ── Build word database ───────────────────────────────────────────────
+      - name: Build word database
+        run: |
+          python3 scripts/build-wordlist.py --output resources/wordlist.bin || \
+          python scripts/build-wordlist.py --output resources/wordlist.bin || \
+          echo "Word database build skipped — using fallback"
+
+      # ── Build the Tauri app ───────────────────────────────────────────────
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           args: --target ${{ matrix.target }}
 
@@ -81,3 +134,46 @@ jobs:
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.deb
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.AppImage
           if-no-files-found: ignore
+
+  # ── Create GitHub Release on version tags ──────────────────────────────────
+  release:
+    name: Create Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: ${{ contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
+          generate_release_notes: true
+          files: release-artifacts/**/*
+          body: |
+            ## CrossForge ${{ github.ref_name }}
+
+            ### Installation
+
+            **macOS (Apple Silicon):** Download `CrossForge_*_aarch64.dmg`, open it, and drag CrossForge to Applications.
+            **macOS (Intel):** Download `CrossForge_*_x64.dmg`, open it, and drag CrossForge to Applications.
+            **Windows:** Download `CrossForge_*_x64-setup.exe` and run it.
+            **Linux:** Download the `.AppImage` file, make it executable, and run it.
+
+            On first launch, CrossForge will automatically download the AI model (~2 GB) and set up AI agents.
+            No other software required.
+
+            ### System Requirements
+            - 8 GB RAM minimum (16 GB recommended for AI features)
+            - 5 GB free disk space
+            - Internet connection for first-run model download
