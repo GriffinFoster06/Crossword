@@ -49,7 +49,6 @@
       "sidecar": true,
       "open": true
     },
-    "dialog": true,
     "fs": {
       "all": false,
       "readFile": true,
