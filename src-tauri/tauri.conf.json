@@ -49,7 +49,7 @@
       "sidecar": true,
       "open": true
     },
-    "dialog": {},
+    "dialog": true,
     "fs": {
       "all": false,
       "readFile": true,
