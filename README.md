@@ -4,55 +4,98 @@ A professional crossword construction desktop app built with Tauri (Rust) + Reac
 
 ---
 
-## Installation
+## Building from Source
 
-### macOS
+There are no pre-built releases yet. You must build CrossForge yourself.
 
-**Apple Silicon (M1/M2/M3/M4)**
+### Prerequisites
 
-1. Download `CrossForge_x.x.x_aarch64.dmg` from the [latest release](../../releases/latest)
-2. Open the DMG and drag **CrossForge** into your Applications folder
-3. Launch CrossForge from Applications
-4. On first launch, the setup wizard downloads the AI model (~2 GB) and configures 5 AI agents automatically — this takes 5–15 minutes depending on your connection speed
-5. After setup completes, CrossForge is fully operational with no further steps
+Install these before anything else:
 
-**Intel Mac**
+1. **rustup** (Rust toolchain manager) — [https://rustup.rs](https://rustup.rs)
+   ```bash
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   source "$HOME/.cargo/env"
+   ```
+   > **Important:** Use rustup, not Homebrew's Rust. The project requires Rust 1.85+ and `rust-toolchain.toml` will enforce this automatically when rustup is used.
 
-1. Download `CrossForge_x.x.x_x64.dmg` from the [latest release](../../releases/latest)
-2. Follow the same steps as above
+2. **Node.js 18+** — [https://nodejs.org](https://nodejs.org)
+
+3. **Xcode Command Line Tools** (macOS only)
+   ```bash
+   xcode-select --install
+   ```
+
+---
+
+### Run in Development
+
+```bash
+git clone https://github.com/griffinfoster/crossword.git
+cd crossword
+npm install
+npm run tauri dev
+```
+
+The first run compiles all Rust dependencies — this takes several minutes. Subsequent runs are fast.
+
+---
+
+### Build a Distributable
+
+```bash
+npm install
+npm run tauri build
+```
+
+Output locations after build completes:
+
+| Platform | Path | File |
+|----------|------|------|
+| macOS (Apple Silicon) | `src-tauri/target/release/bundle/dmg/` | `CrossForge_x.x.x_aarch64.dmg` |
+| macOS (Intel) | `src-tauri/target/release/bundle/dmg/` | `CrossForge_x.x.x_x64.dmg` |
+| Windows | `src-tauri/target/release/bundle/nsis/` | `CrossForge_x.x.x_x64-setup.exe` |
+| Linux | `src-tauri/target/release/bundle/appimage/` | `crossforge_x.x.x_amd64.AppImage` |
+
+**macOS:** Open the DMG, drag CrossForge to Applications, then launch it.
 
 > If macOS says "CrossForge can't be opened because Apple cannot check it for malicious software," right-click the app → Open → Open.
 
----
+**Windows:** Run the installer and click through the SmartScreen prompt (More info → Run anyway).
 
-### Windows
-
-1. Download `CrossForge_x.x.x_x64-setup.exe` from the [latest release](../../releases/latest)
-2. Run the installer (click through the Windows Defender SmartScreen prompt if it appears — click **More info → Run anyway**)
-3. Launch CrossForge from the Start Menu or Desktop shortcut
-4. On first launch, the setup wizard downloads the AI model (~2 GB) and configures 5 AI agents automatically — this takes 5–15 minutes depending on your connection speed
-5. After setup completes, CrossForge is fully operational with no further steps
+**Linux:**
+```bash
+chmod +x crossforge_x.x.x_amd64.AppImage
+./crossforge_x.x.x_amd64.AppImage
+```
 
 ---
 
-### Linux
+### Build Word Database (optional)
 
-1. Download `crossforge_x.x.x_amd64.AppImage` from the [latest release](../../releases/latest)
-2. Make it executable: `chmod +x crossforge_x.x.x_amd64.AppImage`
-3. Run it: `./crossforge_x.x.x_amd64.AppImage`
-4. The first-launch setup wizard handles everything automatically
+The word database powers autofill. To build it from raw word lists:
+
+```bash
+bash scripts/download-data.sh
+python3 scripts/build-wordlist.py --output resources/wordlist.bin
+```
 
 ---
 
-### System Requirements
+## Troubleshooting
 
-| | Minimum | Recommended |
-|---|---|---|
-| RAM | 8 GB | 16 GB |
-| Disk | 5 GB free | 10 GB free |
-| Internet | Required for first launch only | — |
+**`sh: tauri: command not found`**
+Run `npm install` first. The Tauri CLI is installed locally as a dev dependency.
 
-**No other software required.** The Ollama AI engine and all AI models are bundled or downloaded automatically.
+**`feature 'edition2024' is required` / Rust version error**
+Your system Rust is too old. Install rustup from [https://rustup.rs](https://rustup.rs) and make sure `~/.cargo/bin` comes before `/opt/homebrew/bin` in your PATH:
+```bash
+export PATH="$HOME/.cargo/bin:$PATH"
+```
+Add that line to your `~/.zshrc` to make it permanent.
+
+**`failed to download` crate errors**
+Network issue fetching Rust dependencies. Re-run `npm run tauri dev` — it will resume from where it left off.
 
 ---
 
@@ -103,44 +146,6 @@ A professional crossword construction desktop app built with Tauri (Rust) + Reac
 | `Cmd/Ctrl+Shift+Z` | Redo |
 | `Cmd/Ctrl+S` | Save |
 | `Cmd/Ctrl+N` | New puzzle |
-
----
-
-## Building from Source
-
-### Prerequisites
-
-- [Rust](https://rustup.rs) (stable)
-- [Node.js](https://nodejs.org) 18+
-- Python 3.10+
-
-### Run in development
-
-```bash
-# Place the Ollama binary for your platform in src-tauri/binaries/
-# macOS Apple Silicon:
-curl -L https://github.com/ollama/ollama/releases/latest/download/ollama-darwin \
-  -o src-tauri/binaries/ollama-aarch64-apple-darwin
-chmod +x src-tauri/binaries/ollama-aarch64-apple-darwin
-
-npm install
-npm run tauri dev
-```
-
-### Build word database
-
-```bash
-bash scripts/download-data.sh
-python3 scripts/build-wordlist.py --output resources/wordlist.bin
-```
-
-### Build distributable
-
-```bash
-npm run tauri build
-```
-
-The installer for your platform will be in `src-tauri/target/release/bundle/`.
 
 ---
 
