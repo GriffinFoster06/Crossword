@@ -16,19 +16,12 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
             label: macOS (Apple Silicon)
-            ollama_asset: ollama-darwin
-          - os: macos-13
-            target: x86_64-apple-darwin
-            label: macOS (Intel)
-            ollama_asset: ollama-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             label: Windows
-            ollama_asset: ollama-windows-amd64.zip
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             label: Linux
-            ollama_asset: ollama-linux-amd64
 
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
@@ -46,7 +39,8 @@ jobs:
             librsvg2-dev \
             patchelf \
             libssl-dev \
-            libgtk-3-dev
+            libgtk-3-dev \
+            zstd
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -77,9 +71,10 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           mkdir -p src-tauri/binaries
-          curl -fsSL \
-            "https://github.com/ollama/ollama/releases/latest/download/${{ matrix.ollama_asset }}" \
-            -o "src-tauri/binaries/ollama-${{ matrix.target }}"
+          curl -fsSL "https://github.com/ollama/ollama/releases/latest/download/ollama-darwin.tgz" \
+            -o ollama-darwin.tgz
+          tar -xzf ollama-darwin.tgz
+          mv ollama "src-tauri/binaries/ollama-${{ matrix.target }}"
           chmod +x "src-tauri/binaries/ollama-${{ matrix.target }}"
 
       - name: Download Ollama binary (Windows)
@@ -87,7 +82,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path src-tauri\binaries
-          $url = "https://github.com/ollama/ollama/releases/latest/download/${{ matrix.ollama_asset }}"
+          $url = "https://github.com/ollama/ollama/releases/latest/download/ollama-windows-amd64.zip"
           Invoke-WebRequest -Uri $url -OutFile ollama.zip
           Expand-Archive -Path ollama.zip -DestinationPath ollama-extract -Force
           Copy-Item ollama-extract\ollama.exe "src-tauri\binaries\ollama-${{ matrix.target }}.exe"
@@ -96,16 +91,20 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           mkdir -p src-tauri/binaries
-          curl -fsSL \
-            "https://github.com/ollama/ollama/releases/latest/download/${{ matrix.ollama_asset }}" \
-            -o "src-tauri/binaries/ollama-${{ matrix.target }}"
+          curl -fsSL "https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64.tar.zst" \
+            -o ollama-linux.tar.zst
+          tar -xf ollama-linux.tar.zst
+          # Ollama packages the binary at bin/ollama inside the tarball
+          mv bin/ollama "src-tauri/binaries/ollama-${{ matrix.target }}"
           chmod +x "src-tauri/binaries/ollama-${{ matrix.target }}"
 
       # ── Build word database ───────────────────────────────────────────────
       - name: Build word database
+        shell: bash
+        continue-on-error: true
         run: |
-          python3 scripts/build-wordlist.py --output resources/wordlist.bin || \
-          python scripts/build-wordlist.py --output resources/wordlist.bin || \
+          python3 scripts/build-wordlist.py --output resources/wordlist.bin ||
+          python scripts/build-wordlist.py --output resources/wordlist.bin ||
           echo "Word database build skipped — using fallback"
 
       # ── Build the Tauri app ───────────────────────────────────────────────
@@ -166,7 +165,6 @@ jobs:
             ### Installation
 
             **macOS (Apple Silicon):** Download `CrossForge_*_aarch64.dmg`, open it, and drag CrossForge to Applications.
-            **macOS (Intel):** Download `CrossForge_*_x64.dmg`, open it, and drag CrossForge to Applications.
             **Windows:** Download `CrossForge_*_x64-setup.exe` and run it.
             **Linux:** Download the `.AppImage` file, make it executable, and run it.
 
