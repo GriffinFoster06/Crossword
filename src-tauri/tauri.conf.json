@@ -50,19 +50,7 @@
       "open": true
     },
     "fs": {
-      "all": false,
-      "readFile": true,
-      "writeFile": true,
-      "readDir": true,
-      "copyFile": true,
-      "createDir": true,
-      "removeDir": true,
-      "removeFile": true,
-      "renameFile": true,
-      "exists": true,
-      "scope": {
-        "allow": [{"path": "$HOME/**"}]
-      }
+      "requireLiteralLeadingDot": false
     }
   }
 }
