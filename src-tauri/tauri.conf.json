@@ -44,9 +44,6 @@
   },
   "plugins": {
     "shell": {
-      "all": false,
-      "execute": true,
-      "sidecar": true,
       "open": true
     },
     "fs": {
