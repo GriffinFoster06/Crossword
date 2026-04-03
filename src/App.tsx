@@ -17,7 +17,7 @@ import { SetupWizard } from './components/dialogs/SetupWizard';
 import { RebusModal } from './components/dialogs/RebusModal';
 import { ShortcutOverlay } from './components/dialogs/ShortcutOverlay';
 import { StatsPanel } from './components/stats/StatsPanel';
-import { getSetupStatus, getWordCount, savePuzzle, checkCrossforgeModels } from './lib/tauriCommands';
+import { getSetupStatus, getWordCount, savePuzzle } from './lib/tauriCommands';
 
 export default function App() {
   useKeyboard();
