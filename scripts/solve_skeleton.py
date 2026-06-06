@@ -149,9 +149,9 @@ def main():
                 f.show()
                 ac_e, dn_e, _ = f.entries()
                 print("Acrostic:", ''.join(w[0] for _, w in ac_e))
-                json.dump({'grid': [''.join(row) for row in f.grid], 'seed': seed,
-                           'skeleton': si, 'min_score': min_score},
-                          open(_DATA_DIR / 'working_grid.json', 'w'), indent=2)
+                with open(_DATA_DIR / 'working_grid.json', 'w') as _out:
+                    json.dump({'grid': [''.join(row) for row in f.grid], 'seed': seed,
+                               'skeleton': si, 'min_score': min_score}, _out, indent=2)
                 print("Saved working grid.")
                 return
             else:
