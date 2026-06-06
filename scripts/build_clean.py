@@ -109,8 +109,8 @@ def gen_row(above, a_r, col0_black, col14_black, rng):
     return row
 
 
-def _len_order(s, runs_left, col14_black, rng):
-    """Reasonable run lengths to try, longer-biased, shuffled a bit."""
+def _len_order(s, _runs_left, _col14_black, rng):
+    """Shuffled run lengths from 3 to max possible starting at column s."""
     hi = 15 - s
     opts = list(range(3, hi + 1))
     rng.shuffle(opts)

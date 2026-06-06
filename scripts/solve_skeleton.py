@@ -98,10 +98,9 @@ def build_grid(a, col0black, rng):
 
 def main():
     seed = int(sys.argv[1]) if len(sys.argv) > 1 else 1
-    mode = sys.argv[2] if len(sys.argv) > 2 else 'measure'
+    budget = float(sys.argv[2]) if len(sys.argv) > 2 else 120
+    min_score = int(sys.argv[3]) if len(sys.argv) > 3 else 50
     rng = random.Random(seed)
-
-    min_score = int(sys.argv[4]) if len(sys.argv) > 4 else 50
     db = xword.WordDB(min_score=min_score)
     print(f"DB: {db.total()} words (min_score={min_score})")
 
@@ -114,8 +113,6 @@ def main():
     print(f"{len(skeletons)} candidate skeletons (a[0]>=2)")
 
     t0 = time.time()
-    budget = float(sys.argv[3]) if len(sys.argv) > 3 else 120
-
     built = valid30 = alive = 0
     # Round-robin over skeletons: with AC-3, dead grids are rejected in ~ms,
     # so we can sweep thousands of grids across all skeletons quickly.

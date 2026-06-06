@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "setup": "bash scripts/setup-binaries.sh",
-    "pretauri": "node -e \"try{require('child_process').execSync('bash scripts/setup-binaries.sh',{stdio:'inherit'})}catch(e){console.log('Setup skipped (no bash)');}\"",
+    "pretauri": "node -e \"try{require('child_process').execSync('bash scripts/setup-binaries.sh',{stdio:'inherit'})}catch(e){if(e.code==='ENOENT'){console.log('Setup skipped (bash not found)')}else{throw e}}\"",
     "tauri": "tauri",
     "test": "vitest run",
     "test:watch": "vitest"

@@ -242,8 +242,9 @@ class Filler:
 
         self.aslots = across_slots(grid)
         self.dslots = down_slots(grid)
-        assert len(self.aslots) == len(acrostic), \
-            f"{len(self.aslots)} across slots but acrostic len {len(acrostic)}"
+        if len(self.aslots) != len(acrostic):
+            raise ValueError(
+                f"{len(self.aslots)} across slots but acrostic len {len(acrostic)}")
 
         # Unified slot list: (direction, r, c, L)
         self.slots = [('A', r, c, L) for (r, c, L) in self.aslots] + \
