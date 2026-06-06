@@ -9,8 +9,11 @@ import sys
 import json
 import random
 import time
-sys.path.insert(0, '/home/user/Crossword/scripts')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import xword
+
+_DATA_DIR = Path(__file__).resolve().parents[1] / 'data' / 'raw'
 
 ACROSTIC = "TOBEORNOTTOBETHATISTHEQUESTION"
 
@@ -102,7 +105,8 @@ def main():
     db = xword.WordDB(min_score=min_score)
     print(f"DB: {db.total()} words (min_score={min_score})")
 
-    skeletons = json.load(open('/home/user/Crossword/data/raw/skeletons.json'))
+    with open(_DATA_DIR / 'skeletons.json') as _f:
+        skeletons = json.load(_f)
     # Only structurally-plausible: a[0]>=2 (row 0 not a full 15-word that orphans
     # rows 1-2). Rank by fewest 15-letter rows then col0 word quality.
     skeletons = [s for s in skeletons if s['a'][0] >= 2]
@@ -147,7 +151,7 @@ def main():
                 print("Acrostic:", ''.join(w[0] for _, w in ac_e))
                 json.dump({'grid': [''.join(row) for row in f.grid], 'seed': seed,
                            'skeleton': si, 'min_score': min_score},
-                          open('/home/user/Crossword/data/raw/working_grid.json', 'w'), indent=2)
+                          open(_DATA_DIR / 'working_grid.json', 'w'), indent=2)
                 print("Saved working grid.")
                 return
             else:

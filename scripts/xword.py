@@ -9,8 +9,10 @@ Crossword construction library.
 import random
 import time
 from collections import defaultdict
+from pathlib import Path
 
-WORDLIST_PATH = '/home/user/Crossword/data/raw/crossword_words.dict'
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+WORDLIST_PATH = _REPO_ROOT / 'data' / 'raw' / 'crossword_words.dict'
 
 
 # ─── Word database ───────────────────────────────────────────────────────────
@@ -44,6 +46,12 @@ class WordDB:
                 if word in self.score:
                     if sc > self.score[word]:
                         self.score[word] = sc
+                        # Update already-appended entry so sort order stays consistent.
+                        lst = tmp[len(word)]
+                        for idx in range(len(lst) - 1, -1, -1):
+                            if lst[idx][1] == word:
+                                lst[idx] = (sc, word)
+                                break
                     continue
                 self.score[word] = sc
                 tmp[len(word)].append((sc, word))
@@ -91,7 +99,8 @@ class WordDB:
 
 def parse_grid(rows):
     g = [list(r) for r in rows]
-    assert len(g) == 15 and all(len(r) == 15 for r in g), "Grid must be 15x15"
+    if len(g) != 15 or any(len(r) != 15 for r in g):
+        raise ValueError("Grid must be 15x15")
     return g
 
 

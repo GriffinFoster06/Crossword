@@ -23,8 +23,11 @@ import sys
 import json
 import random
 import time
-sys.path.insert(0, '/home/user/Crossword/scripts')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import xword
+
+_DATA_DIR = Path(__file__).resolve().parents[1] / 'data' / 'raw'
 
 ACROSTIC = "TOBEORNOTTOBETHATISTHEQUESTION"
 
@@ -40,7 +43,6 @@ def gen_row(above, a_r, col0_black, col14_black, rng):
         allowed = {c for c in range(1, 15) if above[c] == '#'}
 
     row = ['#'] * 15
-    order_cache = {}
 
     def rec(start_col, runs_left):
         # Fill columns [start_col..14] with runs_left runs, then trailing blacks.
@@ -151,7 +153,8 @@ def main():
 
     db = xword.WordDB(min_score=min_score)
     print(f"DB: {db.total()} words (min_score={min_score})")
-    skeletons = json.load(open('/home/user/Crossword/data/raw/skeletons.json'))
+    with open(_DATA_DIR / 'skeletons.json') as _f:
+        skeletons = json.load(_f)
     skeletons = [s for s in skeletons if s['a'][0] >= 2]
     skeletons.sort(key=lambda s: (s['ones'], -s['minscore']))
     print(f"{len(skeletons)} candidate skeletons")
@@ -185,10 +188,9 @@ def main():
             allw = [w for _, w in ac_e] + [w for _, w in dn_e]
             ok = ok and len(set(allw)) == len(allw)
             print("VALID PUZZLE:", ok)
-            json.dump({'grid': [''.join(row) for row in f.grid], 'seed': seed,
-                       'min_score': min_score},
-                      open('/home/user/Crossword/data/raw/working_grid.json', 'w'),
-                      indent=2)
+            with open(_DATA_DIR / 'working_grid.json', 'w') as _out:
+                json.dump({'grid': [''.join(row) for row in f.grid], 'seed': seed,
+                           'min_score': min_score}, _out, indent=2)
             print("Saved working grid.")
             return
         else:

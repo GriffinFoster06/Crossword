@@ -19,9 +19,12 @@ import json
 import random
 import math
 import time
-sys.path.insert(0, '/home/user/Crossword/scripts')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import xword
 from solve_skeleton import build_grid
+
+_DATA_DIR = Path(__file__).resolve().parents[1] / 'data' / 'raw'
 
 ACROSTIC = "TOBEORNOTTOBETHATISTHEQUESTION"
 
@@ -58,7 +61,8 @@ def main():
 
     db = xword.WordDB(min_score=min_score)
     print(f"DB: {db.total()} words (min_score={min_score})", flush=True)
-    skeletons = json.load(open('/home/user/Crossword/data/raw/skeletons.json'))
+    with open(_DATA_DIR / 'skeletons.json') as _f:
+        skeletons = json.load(_f)
     skeletons = [s for s in skeletons if s['a'][0] >= 2]
     skeletons.sort(key=lambda s: (s['ones'], -s['minscore']))
     print(f"{len(skeletons)} candidate skeletons", flush=True)
@@ -104,10 +108,9 @@ def main():
             ok = (acr == ACROSTIC and not xword.validate_structure(f.grid)
                   and len(set(allw)) == len(allw))
             print("VALID PUZZLE:", ok)
-            json.dump({'grid': [''.join(r) for r in f.grid], 'seed': seed,
-                       'min_score': min_score, 'skeleton': sk['a']},
-                      open('/home/user/Crossword/data/raw/working_grid.json', 'w'),
-                      indent=2)
+            with open(_DATA_DIR / 'working_grid.json', 'w') as _out:
+                json.dump({'grid': [''.join(r) for r in f.grid], 'seed': seed,
+                           'min_score': min_score, 'skeleton': sk['a']}, _out, indent=2)
             print("Saved working_grid.json", flush=True)
             if ok:
                 return

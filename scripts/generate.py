@@ -12,8 +12,11 @@ import random
 import sys
 import time
 import json
-sys.path.insert(0, '/home/user/Crossword/scripts')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import xword
+
+_DATA_DIR = Path(__file__).resolve().parents[1] / 'data' / 'raw'
 
 ACROSTIC = "TOBEORNOTTOBETHATISTHEQUESTION"
 assert len(ACROSTIC) == 30
@@ -142,8 +145,8 @@ def main():
             f.show()
             ac_e, dn_e, _ = f.entries()
             print("Acrostic:", ''.join(w[0] for _, w in ac_e))
-            with open('/home/user/Crossword/data/raw/working_grid.json', 'w') as out:
-                json.dump({'grid': [''.join(row) for row in g], 'seed': seed,
+            with open(_DATA_DIR / 'working_grid.json', 'w') as out:
+                json.dump({'grid': [''.join(row) for row in f.grid], 'seed': seed,
                            'across': ac_e, 'down': dn_e}, out, indent=2)
             print("Saved working grid.")
             return

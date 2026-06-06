@@ -8,7 +8,8 @@ Rank by: fewest 15-letter rows (a[r]==1), then best avg column-0 word score.
 import sys
 import json
 from itertools import product
-sys.path.insert(0, '/home/user/Crossword/scripts')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import xword
 
 ACROSTIC = "TOBEORNOTTOBETHATISTHEQUESTION"
@@ -95,7 +96,9 @@ def main():
         print(f"  ones={ones} minScore={-nmin} avg={-navg:.0f}  col0={' '.join(words)}")
         print(f"      a={a} black={pat}")
 
-    with open('/home/user/Crossword/data/raw/skeletons.json', 'w') as f:
+    data_dir = Path(__file__).resolve().parents[1] / 'data' / 'raw'
+    data_dir.mkdir(parents=True, exist_ok=True)
+    with open(data_dir / 'skeletons.json', 'w') as f:
         json.dump([{'a': a, 'col0black': list(pat), 'col0words': words,
                     'ones': ones, 'minscore': -nmin}
                    for ones, nmin, navg, a, pat, words in found], f)
