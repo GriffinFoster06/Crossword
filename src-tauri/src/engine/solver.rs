@@ -71,6 +71,8 @@ pub struct Solver {
     /// Number of backtrack steps taken
     backtracks: usize,
     max_backtracks: usize,
+    /// Optional acrostic constraint: i-th across slot's first letter must be acrostic[i]
+    acrostic: Option<Vec<char>>,
 }
 
 impl Solver {
@@ -155,7 +157,129 @@ impl Solver {
             start_time: std::time::Instant::now(),
             timeout_secs,
             backtracks: 0,
-            max_backtracks: 500_000,
+            max_backtracks: 5_000_000,
+            acrostic: None,
+        }
+    }
+
+    /// Create a solver with an acrostic constraint: the i-th across entry's first
+    /// letter must be `acrostic[i]`. Re-queries the DB for each across slot using
+    /// the acrostic letter as a fixed first position for complete coverage.
+    pub fn new_with_acrostic(
+        grid: &GridState,
+        db: Arc<WordDatabase>,
+        cancel: Arc<AtomicBool>,
+        progress_tx: Option<tokio::sync::mpsc::UnboundedSender<AutofillProgress>>,
+        min_word_score: u8,
+        timeout_secs: u64,
+        acrostic: &str,
+    ) -> Self {
+        let mut s = Self::new(grid, db.clone(), cancel, progress_tx, min_word_score, timeout_secs);
+        let acrostic_chars: Vec<char> = acrostic.chars().collect();
+
+        // Identify across slots in reading order (row then col)
+        let mut across_indices: Vec<usize> = s.solver_slots
+            .iter()
+            .enumerate()
+            .filter(|(_, ss)| ss.slot.direction == Direction::Across)
+            .map(|(i, _)| i)
+            .collect();
+        across_indices.sort_by_key(|&i| (s.solver_slots[i].slot.row, s.solver_slots[i].slot.col));
+
+        // Replace each across slot's candidates with a DB query that pins the first
+        // letter to the acrostic letter. This avoids the 2000-word truncation that
+        // would otherwise exclude lower-scored acrostic-letter words.
+        //
+        // Also collect all acrostic letter constraints for each down slot that is
+        // crossed at the first letter of an across slot. Multiple across words may
+        // cross the same down slot, so we accumulate all constraints before querying.
+        let mut down_constraints: HashMap<usize, Vec<(usize, char)>> = HashMap::new();
+
+        for (ai, &slot_idx) in across_indices.iter().enumerate() {
+            if ai >= acrostic_chars.len() { break; }
+            let required = acrostic_chars[ai].to_ascii_uppercase();
+            let len = s.solver_slots[slot_idx].slot.length;
+
+            // Build a pattern like "T____" for length 5 and required='T'
+            let mut pattern = String::with_capacity(len);
+            pattern.push(required);
+            for _ in 1..len { pattern.push('_'); }
+
+            let new_candidates: Vec<String> = db
+                .find_matches(&pattern, 50_000)
+                .into_iter()
+                .filter(|w| w.score >= min_word_score)
+                .map(|w| w.word)
+                .collect();
+
+            let new_domain: Vec<usize> = (0..new_candidates.len()).collect();
+            s.solver_slots[slot_idx].candidates = new_candidates;
+            s.solver_slots[slot_idx].domain = new_domain;
+
+            // Record which down slot is crossed at position 0 of this across slot,
+            // accumulating all constraints so they can be applied together below.
+            for crossing in s.solver_slots[slot_idx].crossings.iter() {
+                if crossing.this_pos == 0 {
+                    down_constraints
+                        .entry(crossing.other_slot_idx)
+                        .or_default()
+                        .push((crossing.other_pos, required));
+                }
+            }
+        }
+
+        // Re-initialize each constrained down slot using a multi-letter pattern
+        // built from ALL the acrostic constraints collected above. If no words match,
+        // the domain stays empty — AC-3 will detect the contradiction immediately.
+        for (down_idx, constraints) in &down_constraints {
+            let down_len = s.solver_slots[*down_idx].slot.length;
+            let mut down_pattern = vec![b'_'; down_len];
+            for &(pos, letter) in constraints {
+                down_pattern[pos] = letter as u8;
+            }
+            let down_pattern_str = String::from_utf8(down_pattern).unwrap();
+
+            let down_candidates: Vec<String> = db
+                .find_matches(&down_pattern_str, 50_000)
+                .into_iter()
+                .filter(|w| w.score >= min_word_score)
+                .map(|w| w.word)
+                .collect();
+
+            s.solver_slots[*down_idx].candidates = down_candidates;
+            s.solver_slots[*down_idx].domain =
+                (0..s.solver_slots[*down_idx].candidates.len()).collect();
+        }
+
+        s.acrostic = Some(acrostic_chars);
+        s
+    }
+
+    pub fn elapsed_secs(&self) -> f64 {
+        self.start_time.elapsed().as_secs_f64()
+    }
+
+    /// Shuffle each slot's domain using the given seed, for randomized restarts.
+    pub fn shuffle_domains(&mut self, seed: u64) {
+        use rand::seq::SliceRandom;
+        use rand::SeedableRng;
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+        for ss in &mut self.solver_slots {
+            if ss.assigned.is_none() && !ss.is_approved {
+                ss.domain.shuffle(&mut rng);
+            }
+        }
+    }
+
+    /// Reset solver state for a fresh solve attempt (keeps domains as-is).
+    pub fn reset_for_restart(&mut self) {
+        self.backtracks = 0;
+        self.start_time = std::time::Instant::now();
+        self.used_words.clear();
+        for ss in &mut self.solver_slots {
+            if !ss.is_approved {
+                ss.assigned = None;
+            }
         }
     }
 
@@ -455,6 +579,143 @@ impl Solver {
             quality_score,
             words_placed,
             message: message.to_string(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::grid::GridState;
+    use crate::engine::worddb::WordDatabase;
+
+    fn test_db() -> Arc<WordDatabase> {
+        use std::io::Write;
+        let dir = std::env::temp_dir().join("crossforge_test_words");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("test_words.txt");
+        let mut f = std::fs::File::create(&path).unwrap();
+        // 3-letter words that form valid crossings in a 3x3 grid:
+        // CAT/ARE/BED across, CAB/ARA/TED down — all need to be present
+        for w in &[
+            "CAT", "ARE", "BED", "CAB", "ARA", "TED",
+            "THE", "AND", "FOR", "HAS", "HER", "HIS",
+            "ACE", "AGE", "ATE", "BAD", "BAT", "BET",
+            "CAN", "CAR", "CUP", "DAD", "DAY", "DOG",
+            "EAR", "EAT", "END", "ERA", "EVE", "FAR",
+            "FAN", "FIT", "FUN", "GAP", "GAS", "GOD",
+            "HAD", "HAT", "HIT", "HOT", "ICE", "INN",
+            "JAM", "JOB", "KEY", "KIT", "LAP", "LAW",
+            "LED", "LET", "LID", "LOG", "LOT", "MAP",
+            "MAT", "MEN", "MET", "MIX", "NAP", "NET",
+            "NOR", "NOT", "NUT", "OAK", "ODD", "OLD",
+            "ONE", "OUR", "OWE", "PAN", "PEN", "PIG",
+            "PIN", "PIT", "POT", "PUT", "RAN", "RAT",
+            "RED", "RID", "ROB", "ROD", "ROT", "RUG",
+            "RUN", "SAD", "SAT", "SAW", "SET", "SIT",
+            "SIX", "SKI", "SOB", "SON", "TAB", "TAN",
+            "TAP", "TAR", "TEA", "TEN", "TIE", "TIN",
+            "TIP", "TOE", "TON", "TOP", "TOW", "TUB",
+            "USE", "VAN", "VET", "WAR", "WAS", "WAX",
+            "WEB", "WET", "WHO", "WIG", "WIN", "WIT",
+            "WON", "YAM", "YET", "ZAP", "ZEN", "ZOO",
+        ] {
+            writeln!(f, "{};60", w).unwrap();
+        }
+        Arc::new(WordDatabase::load_text(&path).unwrap())
+    }
+
+    fn no_cancel() -> Arc<AtomicBool> {
+        Arc::new(AtomicBool::new(false))
+    }
+
+    fn make_3x3_grid() -> GridState {
+        let mut g = GridState::new(3);
+        g.compute_numbers();
+        g
+    }
+
+    #[test]
+    fn test_solve_small_grid() {
+        let grid = make_3x3_grid();
+        let db = test_db();
+        let mut solver = Solver::new(&grid, db, no_cancel(), None, 0, 30);
+        let result = solver.solve();
+        assert!(result.success, "solver should fill a 3x3 grid: {}", result.message);
+        assert!(result.grid.is_some());
+        assert!(!result.words_placed.is_empty());
+    }
+
+    #[test]
+    fn test_no_duplicate_words() {
+        let grid = make_3x3_grid();
+        let db = test_db();
+        let mut solver = Solver::new(&grid, db, no_cancel(), None, 0, 30);
+        let result = solver.solve();
+        if result.success {
+            let words: Vec<&str> = result.words_placed.iter().map(|(_, _, w)| w.as_str()).collect();
+            let unique: HashSet<&str> = words.iter().copied().collect();
+            assert_eq!(words.len(), unique.len(), "no duplicate words allowed");
+        }
+    }
+
+    #[test]
+    fn test_locked_cells_preserved() {
+        let mut grid = make_3x3_grid();
+        grid.set_letter(0, 0, Some('T'));
+        grid.cells[0][0].is_locked = true;
+        grid.compute_numbers();
+        let db = test_db();
+        let mut solver = Solver::new(&grid, db, no_cancel(), None, 0, 30);
+        let result = solver.solve();
+        if result.success {
+            if let Some(ref g) = result.grid {
+                assert_eq!(g[0][0], Some('T'), "locked cell should be preserved");
+            }
+        }
+    }
+
+    #[test]
+    fn test_cancellation_stops_early() {
+        let grid = make_3x3_grid();
+        let db = test_db();
+        let cancel = Arc::new(AtomicBool::new(true));
+        let mut solver = Solver::new(&grid, db, cancel, None, 0, 60);
+        let result = solver.solve();
+        assert!(!result.success, "cancelled solver should not succeed");
+    }
+
+    #[test]
+    fn test_timeout_zero() {
+        let grid = make_3x3_grid();
+        let db = test_db();
+        let mut solver = Solver::new(&grid, db, no_cancel(), None, 0, 0);
+        let result = solver.solve();
+        let _ = result;
+    }
+
+    #[test]
+    fn test_already_complete_grid() {
+        let mut grid = GridState::new(3);
+        grid.set_letter(0, 0, Some('C')); grid.set_letter(0, 1, Some('A')); grid.set_letter(0, 2, Some('T'));
+        grid.set_letter(1, 0, Some('A')); grid.set_letter(1, 1, Some('R')); grid.set_letter(1, 2, Some('E'));
+        grid.set_letter(2, 0, Some('B')); grid.set_letter(2, 1, Some('E')); grid.set_letter(2, 2, Some('D'));
+        grid.cells.iter_mut().flatten().for_each(|c| c.is_locked = true);
+        grid.compute_numbers();
+        let db = test_db();
+        let mut solver = Solver::new(&grid, db, no_cancel(), None, 0, 30);
+        let result = solver.solve();
+        assert!(result.success, "already-filled grid should report success");
+    }
+
+    #[test]
+    fn test_quality_score_positive() {
+        let grid = make_3x3_grid();
+        let db = test_db();
+        let mut solver = Solver::new(&grid, db, no_cancel(), None, 0, 30);
+        let result = solver.solve();
+        if result.success {
+            assert!(result.quality_score > 0.0, "quality score should be positive");
         }
     }
 }
