@@ -13,8 +13,8 @@ const SIZE: usize = 15;
 
 fn build_grid_from_strings(rows: &[String]) -> GridState {
     let mut grid = GridState::new(SIZE);
-    for r in 0..SIZE {
-        for (c, ch) in rows[r].chars().enumerate() {
+    for (r, row) in rows.iter().take(SIZE).enumerate() {
+        for (c, ch) in row.chars().take(SIZE).enumerate() {
             if ch == '#' {
                 grid.cells[r][c] = Cell::black();
             }

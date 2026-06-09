@@ -76,6 +76,14 @@ pub struct Solver {
 }
 
 impl Solver {
+    fn recompute_assigned(slot: &mut SolverSlot) {
+        slot.assigned = if slot.is_approved || slot.slot.is_complete {
+            slot.candidates.iter().position(|w| w == &slot.slot.pattern)
+        } else {
+            None
+        };
+    }
+
     pub fn new(
         grid: &GridState,
         db: Arc<WordDatabase>,
@@ -215,6 +223,7 @@ impl Solver {
             let new_domain: Vec<usize> = (0..new_candidates.len()).collect();
             s.solver_slots[slot_idx].candidates = new_candidates;
             s.solver_slots[slot_idx].domain = new_domain;
+            Self::recompute_assigned(&mut s.solver_slots[slot_idx]);
 
             // Record which down slot is crossed at position 0 of this across slot,
             // accumulating all constraints so they can be applied together below.
@@ -249,6 +258,7 @@ impl Solver {
             s.solver_slots[*down_idx].candidates = down_candidates;
             s.solver_slots[*down_idx].domain =
                 (0..s.solver_slots[*down_idx].candidates.len()).collect();
+            Self::recompute_assigned(&mut s.solver_slots[*down_idx]);
         }
 
         s.acrostic = Some(acrostic_chars);
@@ -591,9 +601,14 @@ mod tests {
 
     fn test_db() -> Arc<WordDatabase> {
         use std::io::Write;
-        let dir = std::env::temp_dir().join("crossforge_test_words");
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("test_words.txt");
+        let path = std::env::temp_dir().join(format!(
+            "crossforge_test_words_{}_{}.txt",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         let mut f = std::fs::File::create(&path).unwrap();
         // 3-letter words that form valid crossings in a 3x3 grid:
         // CAT/ARE/BED across, CAB/ARA/TED down — all need to be present
