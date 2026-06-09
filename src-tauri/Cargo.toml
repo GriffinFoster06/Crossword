@@ -10,6 +10,10 @@ rust-version = "1.70"
 name = "crossforge"
 path = "src/main.rs"
 
+[[bin]]
+name = "shakespeare_search"
+path = "src/bin/shakespeare_search.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -50,6 +54,9 @@ regex = "1"
 
 # Logging
 log = "0.4"
+
+# Random number generation
+rand = "0.8"
 
 [profile.release]
 opt-level = 3

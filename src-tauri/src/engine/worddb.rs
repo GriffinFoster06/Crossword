@@ -281,3 +281,109 @@ impl WordDatabase {
             .map(|e| e.score)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_db() -> WordDatabase {
+        let mut by_length: HashMap<usize, Vec<WordEntry>> = HashMap::new();
+        let words = vec![
+            ("THE", 90), ("AND", 85), ("FOR", 80), ("ARE", 75), ("NOT", 70),
+            ("CAT", 65), ("DOG", 60), ("BAT", 55), ("ACE", 50), ("ARC", 45),
+            ("THAT", 88), ("THIS", 82), ("THEM", 76), ("THEN", 72), ("ARCH", 60),
+            ("HELLO", 80), ("WORLD", 75), ("QUIET", 70), ("QUEST", 68), ("QUEEN", 65),
+        ];
+        for (w, s) in words {
+            by_length.entry(w.len()).or_default().push(WordEntry {
+                word: w.to_string(),
+                score: s,
+            });
+        }
+        let total_words = by_length.values().map(|v| v.len()).sum();
+        let buckets = by_length
+            .into_iter()
+            .map(|(len, words)| (len, LengthBucket::new(words)))
+            .collect();
+        WordDatabase { buckets, total_words }
+    }
+
+    #[test]
+    fn test_load_fallback_has_words() {
+        let db = WordDatabase::load_fallback();
+        assert!(db.len() > 100, "fallback should have >100 words, got {}", db.len());
+        assert!(!db.is_empty());
+    }
+
+    #[test]
+    fn test_find_matches_exact_pattern() {
+        let db = test_db();
+        let matches = db.find_matches("A_C", 100);
+        let words: Vec<&str> = matches.iter().map(|m| m.word.as_str()).collect();
+        assert!(words.contains(&"ARC"), "A_C should match ARC");
+        assert!(!words.contains(&"CAT"), "A_C should not match CAT");
+    }
+
+    #[test]
+    fn test_find_matches_wildcard_all() {
+        let db = test_db();
+        let matches = db.find_matches("___", 100);
+        assert_eq!(matches.len(), 10, "should find all 10 three-letter words");
+    }
+
+    #[test]
+    fn test_find_matches_sorted_by_score() {
+        let db = test_db();
+        let matches = db.find_matches("___", 100);
+        for window in matches.windows(2) {
+            assert!(window[0].score >= window[1].score,
+                "results should be sorted by score descending");
+        }
+    }
+
+    #[test]
+    fn test_find_matches_respects_limit() {
+        let db = test_db();
+        let matches = db.find_matches("___", 3);
+        assert_eq!(matches.len(), 3);
+    }
+
+    #[test]
+    fn test_word_exists() {
+        let db = test_db();
+        assert!(db.word_exists("THE"));
+        assert!(db.word_exists("the"));
+        assert!(!db.word_exists("XYZ"));
+    }
+
+    #[test]
+    fn test_get_score() {
+        let db = test_db();
+        assert_eq!(db.get_score("THE"), Some(90));
+        assert_eq!(db.get_score("the"), Some(90));
+        assert_eq!(db.get_score("NONEXISTENT"), None);
+    }
+
+    #[test]
+    fn test_words_for_length() {
+        let db = test_db();
+        let words = db.words_for_length(5, 70);
+        assert!(words.iter().all(|w| w.score >= 70));
+        assert!(words.iter().all(|w| w.word.len() == 5));
+    }
+
+    #[test]
+    fn test_pattern_with_dot_wildcard() {
+        let db = test_db();
+        let matches = db.find_matches("T.E", 100);
+        let words: Vec<&str> = matches.iter().map(|m| m.word.as_str()).collect();
+        assert!(words.contains(&"THE"), "T.E should match THE");
+    }
+
+    #[test]
+    fn test_no_matches_returns_empty() {
+        let db = test_db();
+        let matches = db.find_matches("ZZZ", 100);
+        assert!(matches.is_empty());
+    }
+}
